@@ -14,6 +14,9 @@ contract Issuer{
     Token VUSD;
     Token VEUR;
     Token VINR;
+    Bond VBUSD;
+    Bond VBEUR;
+    Bond VBINR;
 
     //structure to keep track of deposits
     struct Deposit{
@@ -31,6 +34,10 @@ contract Issuer{
         VUSD = new ViaUSD();
         VEUR = new ViaEUR();
         VINR = new ViaINR();
+        VBUSD = new ViaBondUSD();
+        VBEUR = new ViaBondEUR();
+        VBINR = new ViaBondINR();
+
     }
     
     //receive ether, store it against sender address, and issue Via-USD against it
@@ -60,10 +67,11 @@ contract Issuer{
     }
 
     //issue Via tokens for different currencies against ether deposit
-    function buy(bytes32 currency, uint256 amount) public payable returns(bool){
+    //issue Via bonds for different currencies against ether deposit
+    function buy(bytes32 product, uint256 amount) public payable returns(bool){
         //issuer can not issue to itself
         require(msg.sender != owner);
-        //amount of ether to consume to issue via tokens can not be zero
+        //amount of ether to consume to issue via tokens or via bonds can not be zero
         require(amount != 0);
         //the requestor should have some deposits
         require(depositors[msg.sender].length !=0);
@@ -81,24 +89,41 @@ contract Issuer{
             depositors[msg.sender][p].currency = "ether";
             depositors[msg.sender][p].value = msg.value;
         }
-        //request issue Via tokens against paid in ether
+        //request issue Via tokens or bonds against paid in ether
         bool issued = false;
         p=0;
         for(p=0; p<depositors[msg.sender].length; p++){
             //issue only if stored ether is more than amount to consume to issue via tokens
             if(depositors[msg.sender][p].value >= amount){ 
-                if(currency == "Via-USD"){
+                //issue tokens
+                if(product == "Via-USD"){
                     VUSD.issue(amount, msg.sender);
                     depositors[msg.sender][p].value =- amount;
                     issued = true;
                 }
-                if(currency == "Via-EUR"){
+                if(product == "Via-EUR"){
                     VEUR.issue(amount, msg.sender);
                     depositors[msg.sender][p].value =- amount;
                     issued = true;
                 }
-                if(currency == "Via-INR"){
+                if(product == "Via-INR"){
                     VINR.issue(amount, msg.sender);
+                    depositors[msg.sender][p].value =- amount;
+                    issued = true;
+                }
+                //issue bonds
+                if(product == "ViaBond-USD"){
+                    VBUSD.issue(amount, msg.sender);
+                    depositors[msg.sender][p].value =- amount;
+                    issued = true;
+                }
+                if(product == "ViaBond-EUR"){
+                    VBEUR.issue(amount, msg.sender);
+                    depositors[msg.sender][p].value =- amount;
+                    issued = true;
+                }
+                if(product == "ViaBond-INR"){
+                    VBINR.issue(amount, msg.sender);
                     depositors[msg.sender][p].value =- amount;
                     issued = true;
                 }
@@ -108,17 +133,28 @@ contract Issuer{
     }
 
     //redeem issued Via tokens
-    function sell(bytes32 currency, uint256 amount) public {
+    function sell(bytes32 product, uint256 amount) public {
         require(msg.sender != owner);
         require(amount !=0);
-        if(currency == "Via-USD"){
+        //redeem tokens
+        if(product == "Via-USD"){
             VUSD.redeem(amount, msg.sender);
         }
-        if(currency == "Via-EUR"){
+        if(product == "Via-EUR"){
             VEUR.redeem(amount, msg.sender);
         }
-        if(currency == "Via-INR"){
+        if(product == "Via-INR"){
             VINR.redeem(amount, msg.sender);
+        }
+        //redeem bonds
+        if(product == "ViaBond-USD"){
+            VBUSD.redeem(amount, msg.sender);
+        }
+        if(product == "ViaBond-EUR"){
+            VBEUR.redeem(amount, msg.sender);
+        }
+        if(product == "ViaBond-INR"){
+            VBINR.redeem(amount, msg.sender);
         }
         //to do : integrate to bank's credit initiation API if it is redemption in fiat
 
@@ -215,7 +251,7 @@ contract Token is ERC20 {
 
     //requesting redemption of Via and transfer of ether to seller 
     //to do : redemption for fiat currency
-    function redeem(uint256 amount, address seller) public {
+    function redeem(uint256 amount, address seller) public virtual{
         //ensure request to redeem is authorized by issuer
         require(msg.sender == issuer);
         //ensure that sold amount is not zero
@@ -284,12 +320,15 @@ contract ViaUSD is Token{
         super.redeem(amount, seller);
         //find amount of ether to transfer after applying via exchange rate
         eth = super.convertFromVia(amount, "USD", seller);
-        //transfer amount from issuer/sender to seller 
-        transfer(seller, eth);
-        //adjust total supply
-        totalSupply_ +- amount;
-        //generate event
-        emit sold(name, amount);
+        //only if this contract's ether balance is more than ether redeemed
+        if(address(this).balance > eth){
+            //transfer amount from issuer/sender to seller 
+            transfer(seller, eth);
+            //adjust total supply
+            totalSupply_ +- amount;
+            //generate event
+            emit sold(name, amount);
+        }
     }
 
 }
@@ -323,12 +362,15 @@ contract ViaEUR is Token{
         super.redeem(amount, seller);
         //find amount of ether to transfer after applying via exchange rate
         eth = super.convertFromVia(amount, "EUR", seller);
-        //transfer amount from issuer/sender to seller 
-        transfer(seller, eth);
-        //adjust total supply
-        totalSupply_ +- amount;
-        //generate event
-        emit sold(name, amount);
+        //only if this contract's ether balance is more than ether redeemed
+        if(address(this).balance > eth){
+            //transfer amount from issuer/sender to seller 
+            transfer(seller, eth);
+            //adjust total supply
+            totalSupply_ +- amount;
+            //generate event
+            emit sold(name, amount);
+        }
     }
 
 }
@@ -362,34 +404,186 @@ contract ViaINR is Token{
         super.redeem(amount, seller);
         //find amount of ether to transfer after applying via exchange rate
         eth = super.convertFromVia(amount, "INR", seller);
-        //transfer amount from issuer/sender to seller 
-        transfer(seller, eth);
-        //adjust total supply
-        totalSupply_ +- amount;
-        //generate event
-        emit sold(name, amount);
+        //only if this contract's ether balance is more than ether redeemed
+        if(address(this).balance > eth){
+            //transfer amount from issuer/sender to seller 
+            transfer(seller, eth);
+            //adjust total supply
+            totalSupply_ +- amount;
+            //generate event
+            emit sold(name, amount);
+        }
     }
 
 }
 
-contract ZeroCouponBond is ERC20{
+contract Bond is ERC20{
 
     //a Via bond has some value, corresponds to a fiat currency
-    //has a borrower and lender that have agreed to a zero coupon rate called price
-    //and a tenure in unix timestamps of seconds counted from 1970-01-01
-    struct ViaBond{
-        uint256 value;
-        bytes32 currency;
-        address payable borrower;
-        address payable lender;
-        uint tenure;
-        uint price;
+    //has a borrower and lender that have agreed to a zero coupon rate which is the start price of the bond
+    //and a tenure in unix timestamps of seconds counted from 1970-01-01. Via bonds are of one year tenure.
+    //constructor for creating Via bond
+    constructor() public {
+        //setting issuer address
+        issuer = msg.sender;   
     }
 
-    mapping(address => ViaBond[]) public bonds;
-
     //events to capture and report to Via oracle
-    event lent(bytes32 currency, uint value, uint tenure, uint price);
+    event lent(bytes32 currency, uint value, uint price);
+    event redeemed(bytes32 currency, uint value, uint price, uint tenure);
+
+    //requesting issue of Via bonds to borrower for amount of ether as collateral
+    function issue(uint256 amount, address borrower) public virtual{
+        //ensure that request is sent by the issuer
+        require(msg.sender == issuer);
+        //ensure that brought amount is not zero
+        require(amount != 0);
+    }
+
+    //requesting redemption of Via bonds and transfer of ether collateral to borrower 
+    //to do : redemption of Via bonds for fiat currency
+    function redeem(uint256 amount, address borrower) public virtual{
+        //ensure request to redeem is authorized by issuer
+        require(msg.sender == issuer);
+        //ensure that sold amount is not zero
+        require(amount != 0);
+    }
+
+    //uses Oraclize to calculate price of 1 year zero coupon bond in currency and for amount to issue to borrower
+    function getBondValueToIssue(uint256 amount, bytes32 currency, address borrower) public returns(uint256){
+        
+    }
+
+    //calculate price of redeeming zero coupon bond in currency and for amount to borrower who may redeem before end of year
+    function getBondValueToRedeem(uint256 amount, bytes32 currency, address borrower) public returns(uint256){
+        
+    }
+
+
+}
+
+contract ViaBondUSD is Bond{
+
+    //name of Via bond (eg, ViaBond-USD)
+    string public constant name = "ViaBond-USD";
+    string public constant symbol = "ViaBond-USD";
+
+    uint256 via;
+    uint256 eth;
+
+    //requesting issue of Via bond for amount of ether
+    function issue(uint256 amount, address borrower) public override{
+        //calling super
+        super.issue(amount, borrower);
+        //find amount of via bonds to transfer after applying exchange rate
+        viabond = super.getBondValueToIssue(amount, "USD", borrower);
+        //transfer amount from issuer/sender to borrower 
+        transfer(borrower, viabond);
+        //adjust total supply
+        totalSupply_ += viabond;
+        //generate event
+        emit lent(name, amount, viabond);
+    }
+
+    //requesting redemption of Via bonds
+    function redeem(uint256 amount, address borrower) public override {
+        //calling super
+        super.redeem(amount, borrower);
+        //find amount of ether to transfer 
+        eth = super.getBondValueToRedeem(amount, "USD", borrower);
+        //only if this contract's ether balance is more than ether redeemed
+        if(address(this).balance > eth){
+            //transfer amount from issuer/sender to borrower 
+            transfer(borrower, eth);
+            //adjust total supply
+            totalSupply_ +- amount;
+            //generate event
+            emit redeemed(name, amount, eth, now);
+        }
+    }
+}
+
+contract ViaBondEUR is Bond{
+
+    //name of Via bond (eg, ViaBond-USD)
+    string public constant name = "ViaBond-EUR";
+    string public constant symbol = "ViaBond-EUR";
+
+    uint256 via;
+    uint256 eth;
+
+    //requesting issue of Via bond for amount of ether
+    function issue(uint256 amount, address borrower) public override{
+        //calling super
+        super.issue(amount, borrower);
+        //find amount of via bonds to transfer after applying exchange rate
+        viabond = super.getBondValueToIssue(amount, "EUR", borrower);
+        //transfer amount from issuer/sender to borrower 
+        transfer(borrower, viabond);
+        //adjust total supply
+        totalSupply_ += viabond;
+        //generate event
+        emit lent(name, amount, viabond);
+    }
+
+    //requesting redemption of Via bonds
+    function redeem(uint256 amount, address borrower) public override {
+        //calling super
+        super.redeem(amount, borrower);
+        //find amount of ether to transfer 
+        eth = super.getBondValueToRedeem(amount, "EUR", borrower);
+        //only if this contract's ether balance is more than ether redeemed
+        if(address(this).balance > eth){
+            //transfer amount from issuer/sender to borrower 
+            transfer(borrower, eth);
+            //adjust total supply
+            totalSupply_ +- amount;
+            //generate event
+            emit redeemed(name, amount, eth, now);
+        }
+    }
+
+}
+
+contract ViaBondINR is Bond{
+
+    //name of Via bond (eg, ViaBond-USD)
+    string public constant name = "ViaBond-INR";
+    string public constant symbol = "ViaBond-INR";
+
+    uint256 via;
+    uint256 eth;
+
+    //requesting issue of Via bond for amount of ether
+    function issue(uint256 amount, address borrower) public override{
+        //calling super
+        super.issue(amount, borrower);
+        //find amount of via bonds to transfer after applying exchange rate
+        viabond = super.getBondValueToIssue(amount, "INR", borrower);
+        //transfer amount from issuer/sender to borrower 
+        transfer(borrower, viabond);
+        //adjust total supply
+        totalSupply_ += viabond;
+        //generate event
+        emit lent(name, amount, viabond);
+    }
+
+    //requesting redemption of Via bonds
+    function redeem(uint256 amount, address borrower) public override {
+        //calling super
+        super.redeem(amount, borrower);
+        //find amount of ether to transfer 
+        eth = super.getBondValueToRedeem(amount, "INR", borrower);
+        //only if this contract's ether balance is more than ether redeemed
+        if(address(this).balance > eth){
+            //transfer amount from issuer/sender to borrower 
+            transfer(borrower, eth);
+            //adjust total supply
+            totalSupply_ +- amount;
+            //generate event
+            emit redeemed(name, amount, eth, now);
+        }
+    }
 
 }
 
