@@ -238,6 +238,21 @@ contract Token is ERC20 {
         }
     }
 
+    //convert Via-currency (eg, Via-EUR, Via-INR, Via-USD) to Ether
+    function convertFromVia(uint256 amount, bytes32 currency, address seller) public returns(uint256){
+        //only issuer can call oracle
+        require(msg.sender == issuer);
+        if(currency!="USD"){
+            uint256 amountInViaUSD = amount * uint256(stringToUint(new ViaExchangeRate(+"Via_"+currency+"_to_Via_USD")));
+            uint256 inEth = amountInViaUSD * (1/uint256(stringToUint(new EthToUSD())));
+            return inEth;
+        }
+        else{
+            uint256 inEth = amount * (1/uint256(stringToUint(new EthToUSD())));
+            return inEth;
+        }
+    }
+
 }
 
 contract ViaUSD is Token{
@@ -247,6 +262,7 @@ contract ViaUSD is Token{
     string public constant symbol = "Via-USD";
 
     uint256 via;
+    uint256 eth;
 
     //requesting issue of Via for amount of ether
     function issue(uint256 amount, address buyer) public override{
@@ -262,6 +278,20 @@ contract ViaUSD is Token{
         emit sold(name, amount);
     }
 
+    //requesting redemption of Via-USD
+    function redeem(uint256 amount, address seller) public override {
+        //calling super
+        super.redeem(amount, seller);
+        //find amount of ether to transfer after applying via exchange rate
+        eth = super.convertFromVia(amount, "USD", seller);
+        //transfer amount from issuer/sender to seller 
+        transfer(seller, eth);
+        //adjust total supply
+        totalSupply_ +- amount;
+        //generate event
+        emit sold(name, amount);
+    }
+
 }
 
 contract ViaEUR is Token{
@@ -271,6 +301,7 @@ contract ViaEUR is Token{
     string public constant symbol = "Via-EUR";
 
     uint256 via;
+    uint256 eth;
 
     //requesting issue of Via for amount of ether
     function issue(uint256 amount, address buyer) public override{
@@ -286,6 +317,20 @@ contract ViaEUR is Token{
         emit sold(name, amount);
     }
 
+    //requesting redemption of Via-EUR
+    function redeem(uint256 amount, address seller) public override {
+        //calling super
+        super.redeem(amount, seller);
+        //find amount of ether to transfer after applying via exchange rate
+        eth = super.convertFromVia(amount, "EUR", seller);
+        //transfer amount from issuer/sender to seller 
+        transfer(seller, eth);
+        //adjust total supply
+        totalSupply_ +- amount;
+        //generate event
+        emit sold(name, amount);
+    }
+
 }
 
 contract ViaINR is Token{
@@ -295,6 +340,7 @@ contract ViaINR is Token{
     string public constant symbol = "Via-INR";
 
     uint256 via;
+    uint256 eth;
 
     //requesting issue of Via for amount of ether
     function issue(uint256 amount, address buyer) public override{
@@ -310,14 +356,28 @@ contract ViaINR is Token{
         emit sold(name, amount);
     }
 
+    //requesting redemption of Via-INR
+    function redeem(uint256 amount, address seller) public override {
+        //calling super
+        super.redeem(amount, seller);
+        //find amount of ether to transfer after applying via exchange rate
+        eth = super.convertFromVia(amount, "INR", seller);
+        //transfer amount from issuer/sender to seller 
+        transfer(seller, eth);
+        //adjust total supply
+        totalSupply_ +- amount;
+        //generate event
+        emit sold(name, amount);
+    }
+
 }
 
-contract Loan is ERC20{
+contract ZeroCouponBond is ERC20{
 
-    //a Via loan has some value, corresponds to a fiat currency
+    //a Via bond has some value, corresponds to a fiat currency
     //has a borrower and lender that have agreed to a zero coupon rate called price
     //and a tenure in unix timestamps of seconds counted from 1970-01-01
-    struct ViaLoans{
+    struct ViaBond{
         uint256 value;
         bytes32 currency;
         address payable borrower;
@@ -326,7 +386,7 @@ contract Loan is ERC20{
         uint price;
     }
 
-    mapping(address => ViaLoans[]) public loans;
+    mapping(address => ViaBond[]) public bonds;
 
     //events to capture and report to Via oracle
     event lent(bytes32 currency, uint value, uint tenure, uint price);
