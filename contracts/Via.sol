@@ -1,18 +1,19 @@
 // (c) Kallol Borah, 2020
+// Implementation of the Via tokens with ERC20 compliance so that integration to wallets and exchanges is seamless.
 
 pragma solidity >=0.4.16 <0.7.0;
 
-contract Issuer{
+import "./provableAPI.sol";
 
-    using SafeMath for uint256;
+contract Issuer{
 
     //this issuer's address
     address owner;
 
     //instance variables for Via tokens
-    Token ViaUSD;
-    Token ViaEUR;
-    Token ViaINR;
+    Token VUSD;
+    Token VEUR;
+    Token VINR;
 
     //structure to keep track of deposits
     struct Deposit{
@@ -27,12 +28,12 @@ contract Issuer{
     constructor() public { 
         owner = msg.sender;
         //create Via token contracts
-        ViaUSD = new Token("Via-USD");
-        ViaEUR = new Token("Via-EUR");
-        ViaINR = new Token("Via-INR");
+        VUSD = new ViaUSD();
+        VEUR = new ViaEUR();
+        VINR = new ViaINR();
     }
-   
-    //receive ether and store it against sender address
+    
+    //receive ether, store it against sender address, and issue Via-USD against it
     receive() external payable{
         //issuer can not deposit 
         require(msg.sender != owner);
@@ -43,7 +44,7 @@ contract Issuer{
         bool found=false; 
         uint p=0;
         for(p=0; p<depositors[msg.sender].length; p++){
-            if(depositors[msg.sender][p].currency="ether"){
+            if(depositors[msg.sender][p].currency=="ether"){
                 depositors[msg.sender][p].value += msg.value;
                 found = true;
             }
@@ -53,45 +54,74 @@ contract Issuer{
             depositors[msg.sender][p].currency = "ether";
             depositors[msg.sender][p].value = msg.value;
         }
+        //issue Via-USD by default
+        VUSD.issue(msg.value, msg.sender);
+        depositors[msg.sender][p].value =- msg.value;
     }
 
-    //issue Via tokens for currency against deposit
-    function issue(bytes32 currency) public returns(bool){
+    //issue Via tokens for different currencies against ether deposit
+    function buy(bytes32 currency, uint256 amount) public payable returns(bool){
         //issuer can not issue to itself
         require(msg.sender != owner);
-        //amount of ether to issue via against can not be zero
-        require(msg.value != 0);
+        //amount of ether to consume to issue via tokens can not be zero
+        require(amount != 0);
         //the requestor should have some deposits
         require(depositors[msg.sender].length !=0);
-        //call Oracle to check exchange rate of ether/other currency deposit with the fiat currency in request param
-        //for the time being assuming it is 1:1
-        bool issued = false;
+        //store received ether
+        bool found=false; 
         uint p=0;
         for(p=0; p<depositors[msg.sender].length; p++){
-            //call oracle to find exchange rate of depositors[msg.sender][p].currency against currency passed in param
-            //msg.value should be replaced with amount after applying exchange rate
-            if(depositors[msg.sender][p].value >= msg.value){ 
+            if(depositors[msg.sender][p].currency=="ether"){
+                depositors[msg.sender][p].value += msg.value;
+                found = true;
+            }
+        }
+        //if not found, add ether as currency and add what is sent by the depositor
+        if(!found){
+            depositors[msg.sender][p].currency = "ether";
+            depositors[msg.sender][p].value = msg.value;
+        }
+        //request issue Via tokens against paid in ether
+        bool issued = false;
+        p=0;
+        for(p=0; p<depositors[msg.sender].length; p++){
+            //issue only if stored ether is more than amount to consume to issue via tokens
+            if(depositors[msg.sender][p].value >= amount){ 
                 if(currency == "Via-USD"){
-                    ViaUSD.issue(msg.value, msg.sender);
+                    VUSD.issue(amount, msg.sender);
+                    depositors[msg.sender][p].value =- amount;
                     issued = true;
                 }
                 if(currency == "Via-EUR"){
-                    ViaEUR.issue(msg.value, msg.sender);
+                    VEUR.issue(amount, msg.sender);
+                    depositors[msg.sender][p].value =- amount;
                     issued = true;
                 }
                 if(currency == "Via-INR"){
-                    ViaINR.issue(msg.value, msg.sender);
+                    VINR.issue(amount, msg.sender);
+                    depositors[msg.sender][p].value =- amount;
                     issued = true;
                 }
             }
         }
+        return issued;
     }
 
     //redeem issued Via tokens
-    function redeem() public payable{
+    function sell(bytes32 currency, uint256 amount) public {
         require(msg.sender != owner);
-        require(msg.value != 0);
-        //to do : integrate to bank's credit initiation API
+        require(amount !=0);
+        if(currency == "Via-USD"){
+            VUSD.redeem(amount, msg.sender);
+        }
+        if(currency == "Via-EUR"){
+            VEUR.redeem(amount, msg.sender);
+        }
+        if(currency == "Via-INR"){
+            VINR.redeem(amount, msg.sender);
+        }
+        //to do : integrate to bank's credit initiation API if it is redemption in fiat
+
     }
 
     //keep Via tokens in custody
@@ -104,6 +134,14 @@ contract Issuer{
 }
 
 contract ERC20{
+
+    using SafeMath for uint256;
+
+    //address of the issuer of the Via, set once, never reset again
+    address public issuer;
+
+    //allowing 2-floating points for Via tokens
+    uint8 public constant decimals = 2;
 
     //variables
     uint256 totalSupply_;
@@ -156,81 +194,129 @@ contract ERC20{
 
 }
 
-
-contract Token is ERC20{
-
-    //address of the issuer of the Via, set once, never reset again
-    address immutable issuer;
-
-    //name of Via token (eg, Via-USD)
-    string public immutable name;
-    string public immutable symbol;
-    
-
-    //a Via has balance value equal to a fiat currency
-    //for example, 1 Via-USD corresponds to 1 Via corresponding to the USD fiat
-    struct Via{
-        uint256 value;
-        bytes32 currency;
-    }
-
-    mapping(address => Via[]) public holdings;
+contract Token is ERC20 {
 
     //events to capture and report to Via oracle
-    event sold(bytes32 currency, uint value);
+    event sold(string currency, uint value);
 
     //constructor for creating Via token
-    constructor(bytes32 tokenName) public returns (address){
-        //setting issuer address and via token name
+    constructor() public {
+        //setting issuer address
         issuer = msg.sender;   
-        name = tokenName;
-        symbol = tokenName;     
     }
 
-    //requesting issue of Via for value and for fiat currency
-    function issue(uint256 amount, address buyer) public {
+    //requesting issue of Via to buyer for amount of ether
+    function issue(uint256 amount, address buyer) public virtual{
         //ensure that request is sent by the issuer
         require(msg.sender == issuer);
         //ensure that brought amount is not zero
         require(amount != 0);
-        //add amount in issuer/sender's balances
-        super.balances[msg.sender] += amount;
-        //transfer amount from issuer/sender to buyer 
-        super.transfer(buyer, amount);
-        //adjust total supply
-        super.totalSupply_ += amount;
-        //generate event
-        emit sold(name, amount);
     }
 
-    //requesting redemption of Via for value and for fiat currency
-    function sell(bytes32 currency) payable public {
-        //ensure that the issuer is not selling and that issuer setup is done
-        require(msg.sender != issuer);
+    //requesting redemption of Via and transfer of ether to seller 
+    //to do : redemption for fiat currency
+    function redeem(uint256 amount, address seller) public {
+        //ensure request to redeem is authorized by issuer
+        require(msg.sender == issuer);
         //ensure that sold amount is not zero
-        require(msg.value != 0);
-        //remove via corresponding to currency (eg, ether or fiat or some other via-fiat) in beneficiary holdings
-        bytes32 name;
-        holdings[holdings.length].currency = name;
-        //find Via exchange rate for currency from via oracle if currency is not ether, else first find value of ether in fiat
-        uint exchanged;
-        //subtract via exchanged for amount of currency to beneficiary holdings 
-        holdings[holdings.length].value = exchanged;
-        //adjust total supply
-        totalSupply_ -= exchanged;
-        //generate event
-        emit sold(name, exchanged);
+        require(amount != 0);
+    }
+    
+    //uses Oraclize 
+    function convertToVia(uint256 amount, bytes32 currency, address buyer) public returns(uint256){
+        //only issuer can call oracle
+        require(msg.sender == issuer);
+        //to first convert amount of ether passed to this function to USD
+        uint256 amountInUSD = (amount/1000000000000000000)*uint256(stringToUint(new EthToUSD()));
+        //to then convert USD to Via-currency if currency is not USD itself 
+        if(currency!="USD"){
+            uint256 inVia = amountInUSD * uint256(stringToUint(new ViaExchangeRate(+"Via_USD_to_Via_"+currency)));
+            return inVia;
+        }
+        else{
+            return amountInUSD;
+        }
     }
 
 }
 
+contract ViaUSD is Token{
+
+    //name of Via token (eg, Via-USD)
+    string public constant name = "Via-USD";
+    string public constant symbol = "Via-USD";
+
+    uint256 via;
+
+    //requesting issue of Via for amount of ether
+    function issue(uint256 amount, address buyer) public override{
+        //calling super
+        super.issue(amount, buyer);
+        //find amount of via tokens to transfer after applying exchange rate
+        via = super.convertToVia(amount, "USD", buyer);
+        //transfer amount from issuer/sender to buyer 
+        transfer(buyer, via);
+        //adjust total supply
+        totalSupply_ += via;
+        //generate event
+        emit sold(name, amount);
+    }
+
+}
+
+contract ViaEUR is Token{
+
+    //name of Via token (eg, Via-USD)
+    string public constant name = "Via-EUR";
+    string public constant symbol = "Via-EUR";
+
+    uint256 via;
+
+    //requesting issue of Via for amount of ether
+    function issue(uint256 amount, address buyer) public override{
+        //calling super
+        super.issue(amount, buyer);
+        //find amount of via tokens to transfer after applying exchange rate
+        via = super.convertToVia(amount, "EUR", buyer);
+        //transfer amount from issuer/sender to buyer 
+        transfer(buyer, via);
+        //adjust total supply
+        totalSupply_ += via;
+        //generate event
+        emit sold(name, amount);
+    }
+
+}
+
+contract ViaINR is Token{
+
+    //name of Via token (eg, Via-USD)
+    string public constant name = "Via-INR";
+    string public constant symbol = "Via-INR";
+
+    uint256 via;
+
+    //requesting issue of Via for amount of ether
+    function issue(uint256 amount, address buyer) public override{
+        //calling super
+        super.issue(amount, buyer);
+        //find amount of via tokens to transfer after applying exchange rate
+        via = super.convertToVia(amount, "INR", buyer);
+        //transfer amount from issuer/sender to buyer 
+        transfer(buyer, via);
+        //adjust total supply
+        totalSupply_ += via;
+        //generate event
+        emit sold(name, amount);
+    }
+
+}
 
 contract Loan is ERC20{
 
     //a Via loan has some value, corresponds to a fiat currency
     //has a borrower and lender that have agreed to a zero coupon rate called price
     //and a tenure in unix timestamps of seconds counted from 1970-01-01
-    //the boolean offer indicates if the Via loan is an offer to lend or not
     struct ViaLoans{
         uint256 value;
         bytes32 currency;
@@ -238,49 +324,12 @@ contract Loan is ERC20{
         address payable lender;
         uint tenure;
         uint price;
-        bool offer;
     }
 
     mapping(address => ViaLoans[]) public loans;
 
-    //data structure to hold offers to lend Via in a specific fiat currency
-    //over a floor price and floor rate and over a minimum tenure
-    struct ViaOffers{
-        uint256 value;
-        bytes32 currency;
-        uint tenure;
-        uint price;
-    }
-
-    mapping(address => ViaOffers[]) public offers;
-
     //events to capture and report to Via oracle
     event lent(bytes32 currency, uint value, uint tenure, uint price);
-  
-    //offering a loan in a currency that is of most benefit
-    function offer(bytes32 fiat, uint value) payable public {
-
-    }
-
-    //bid to borrow on an offer
-    function bid(bytes32 currency, uint price, uint tenure, uint amount) payable public {
-        //ensure that the issuer is not borrowing and that issuer setup is done
-        require(msg.sender != issuer);
-        //ensure that collateral offered is not zero
-        require(msg.value != 0);
-        //ensure that there is currency and enough of it to lend
-        for(uint p=0; p < offers.length; p++){
-            if(offers[p].currency == currency && offers[p].value >= amount){
-                //take approval from lender
-            }
-        }
-    }
-
-    //pay back loan
-    function payback() payable public {
-
-    }
-
 
 }
 
@@ -289,14 +338,134 @@ library SafeMath { // Only relevant functions
     assert(b <= a);
     return a - b;
     }
+
     function add(uint256 a, uint256 b) internal pure returns (uint256)   {
     uint256 c = a + b;
     assert(c >= a);
     return c;
     }
+
+    //added from https://ethereum.stackexchange.com/questions/62371/convert-a-string-to-a-uint256-with-error-handling
+    function stringToUint(string s) view returns (uint, bool) {
+        bool hasError = false;
+        bytes memory b = bytes(s);
+        uint result = 0;
+        uint oldResult = 0;
+        for (uint i = 0; i < b.length; i++) { // c = b[i] was not needed
+            if (b[i] >= 48 && b[i] <= 57) {
+                // store old value so we can check for overflows
+                oldResult = result;
+                result = result * 10 + (uint(b[i]) - 48); // bytes and int are not compatible with the operator -.
+                // prevent overflows
+                if(oldResult > result ) {
+                    // we can only get here if the result overflowed and is smaller than last stored value
+                    hasError = true;
+                }
+            } else {
+                hasError = true;
+            }
+        }
+        return (result, hasError); 
+    }
 }
 
-library ViaOracle{
+//taken from Oraclize's examples, with minor modifications
+contract ViaExchangeRate is usingProvable {
 
+    event LogNewProvableQuery(string description);
+    event LogResult(string result);
 
+    bytes32 currency;
+
+    constructor(bytes32 _currency)
+        public
+    {
+        provable_setProof(proofType_Android | proofStorage_IPFS);
+        currency = _currency;
+    }
+
+    function __callback(
+        bytes32 _myid,
+        string memory _result,
+        bytes memory _proof
+    )
+        public returns(string)
+    {
+        require(msg.sender == provable_cbAddress());
+        emit LogResult(_result);
+        return _result;
+    }
+
+    function request(
+        string memory _query,
+        string memory _method,
+        string memory _url,
+        string memory _kwargs
+    )
+        public
+        payable
+    {
+        if (provable_getPrice("computation") > address(this).balance) {
+            emit LogNewProvableQuery("Provable query was NOT sent, please add some ETH to cover for the query fee");
+        } else {
+            emit LogNewProvableQuery("Provable query was sent, standing by for the answer...");
+            provable_query("computation",
+                [_query,
+                _method,
+                _url,
+                _kwargs]
+            );
+        }
+    }
+    
+    //uses the processing engine for via exchange rates
+    function requestPost()
+        public
+        payable
+    {  
+        request("QmdKK319Veha83h6AYgQqhx9YRsJ9MJE7y33oCXyZ4MqHE",
+                "POST",
+                "https://via-oracle.azurewebsites.net/api/via/er",
+                '{"json": {"postcodes" : ["'+currency+'"]}}'
+                );
+    }
+
+}
+
+//taken from Oraclize's examples, with minor modifications
+contract EthToUSD is usingProvable {
+
+    event LogNewProvableQuery(string description);
+    event LogNewKrakenPriceTicker(string price);
+
+    constructor()
+        public
+    {
+        provable_setProof(proofType_Android | proofStorage_IPFS);
+        update(); // Update price on contract creation...
+    }
+
+    function __callback(
+        bytes32 _myid,
+        string memory _result,
+        bytes memory _proof
+    )
+        public returns (string)
+    {
+        require(msg.sender == provable_cbAddress());
+        emit LogNewKrakenPriceTicker(_result);
+        return _result;
+    }
+
+    function update()
+        public
+        payable
+    {
+        if (provable_getPrice("URL") > address(this).balance) {
+            emit LogNewProvableQuery("Provable query was NOT sent, please add some ETH to cover for the query fee!");
+        } else {
+            emit LogNewProvableQuery("Provable query was sent, standing by for the answer...");
+            provable_query(60, "URL", "json(https://api.kraken.com/0/public/Ticker?pair=ETHUSD).result.XETHXUSD.c.0");
+        }
+    }
 }
