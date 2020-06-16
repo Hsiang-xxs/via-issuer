@@ -11,9 +11,9 @@ contract Issuer{
     address owner;
 
     //instance variables for Via tokens
-    Token VUSD;
-    Token VEUR;
-    Token VINR;
+    Cash VUSD;
+    Cash VEUR;
+    Cash VINR;
     Bond VBUSD;
     Bond VBEUR;
     Bond VBINR;
@@ -68,7 +68,8 @@ contract Issuer{
 
     //issue Via tokens for different currencies against ether deposit
     //issue Via bonds for different currencies against ether deposit
-    function buy(bytes32 product, uint256 amount) public payable returns(bool){
+    //todo : can we accept other via cash tokens in addition to ether ?
+    function buy(bytes32 token, uint256 amount) public payable returns(bool){
         //issuer can not issue to itself
         require(msg.sender != owner);
         //amount of ether to consume to issue via tokens or via bonds can not be zero
@@ -96,33 +97,33 @@ contract Issuer{
             //issue only if stored ether is more than amount to consume to issue via tokens
             if(depositors[msg.sender][p].value >= amount){ 
                 //issue tokens
-                if(product == "Via-USD"){
+                if(token == "Via-USD"){
                     VUSD.issue(amount, msg.sender);
                     depositors[msg.sender][p].value =- amount;
                     issued = true;
                 }
-                if(product == "Via-EUR"){
+                if(token == "Via-EUR"){
                     VEUR.issue(amount, msg.sender);
                     depositors[msg.sender][p].value =- amount;
                     issued = true;
                 }
-                if(product == "Via-INR"){
+                if(token == "Via-INR"){
                     VINR.issue(amount, msg.sender);
                     depositors[msg.sender][p].value =- amount;
                     issued = true;
                 }
                 //issue bonds
-                if(product == "ViaBond-USD"){
+                if(token == "ViaBond-USD"){
                     VBUSD.issue(amount, msg.sender);
                     depositors[msg.sender][p].value =- amount;
                     issued = true;
                 }
-                if(product == "ViaBond-EUR"){
+                if(token == "ViaBond-EUR"){
                     VBEUR.issue(amount, msg.sender);
                     depositors[msg.sender][p].value =- amount;
                     issued = true;
                 }
-                if(product == "ViaBond-INR"){
+                if(token == "ViaBond-INR"){
                     VBINR.issue(amount, msg.sender);
                     depositors[msg.sender][p].value =- amount;
                     issued = true;
@@ -133,27 +134,27 @@ contract Issuer{
     }
 
     //redeem issued Via tokens
-    function sell(bytes32 product, uint256 amount) public {
+    function sell(bytes32 token, uint256 amount) public {
         require(msg.sender != owner);
         require(amount !=0);
         //redeem tokens
-        if(product == "Via-USD"){
+        if(token == "Via-USD"){
             VUSD.redeem(amount, msg.sender);
         }
-        if(product == "Via-EUR"){
+        if(token == "Via-EUR"){
             VEUR.redeem(amount, msg.sender);
         }
-        if(product == "Via-INR"){
+        if(token == "Via-INR"){
             VINR.redeem(amount, msg.sender);
         }
         //redeem bonds
-        if(product == "ViaBond-USD"){
+        if(token == "ViaBond-USD"){
             VBUSD.redeem(amount, msg.sender);
         }
-        if(product == "ViaBond-EUR"){
+        if(token == "ViaBond-EUR"){
             VBEUR.redeem(amount, msg.sender);
         }
-        if(product == "ViaBond-INR"){
+        if(token == "ViaBond-INR"){
             VBINR.redeem(amount, msg.sender);
         }
         //to do : integrate to bank's credit initiation API if it is redemption in fiat
@@ -230,7 +231,7 @@ contract ERC20{
 
 }
 
-contract Token is ERC20 {
+contract Cash is ERC20 {
 
     //events to capture and report to Via oracle
     event sold(string currency, uint value);
@@ -259,14 +260,14 @@ contract Token is ERC20 {
     }
     
     //uses Oraclize 
-    function convertToVia(uint256 amount, bytes32 currency, address buyer) public returns(uint256){
+    function convertToVia(uint256 amount, bytes32 currency) public returns(uint256){
         //only issuer can call oracle
         require(msg.sender == issuer);
         //to first convert amount of ether passed to this function to USD
         uint256 amountInUSD = (amount/1000000000000000000)*uint256(stringToUint(new EthToUSD()));
         //to then convert USD to Via-currency if currency is not USD itself 
         if(currency!="USD"){
-            uint256 inVia = amountInUSD * uint256(stringToUint(new ViaExchangeRate(+"Via_USD_to_Via_"+currency)));
+            uint256 inVia = amountInUSD * uint256(stringToUint(new ViaRate(+"Via_USD_to_Via_"+currency,"er")));
             return inVia;
         }
         else{
@@ -275,11 +276,11 @@ contract Token is ERC20 {
     }
 
     //convert Via-currency (eg, Via-EUR, Via-INR, Via-USD) to Ether
-    function convertFromVia(uint256 amount, bytes32 currency, address seller) public returns(uint256){
+    function convertFromVia(uint256 amount, bytes32 currency) public returns(uint256){
         //only issuer can call oracle
         require(msg.sender == issuer);
         if(currency!="USD"){
-            uint256 amountInViaUSD = amount * uint256(stringToUint(new ViaExchangeRate(+"Via_"+currency+"_to_Via_USD")));
+            uint256 amountInViaUSD = amount * uint256(stringToUint(new ViaRate(+"Via_"+currency+"_to_Via_USD","er")));
             uint256 inEth = amountInViaUSD * (1/uint256(stringToUint(new EthToUSD())));
             return inEth;
         }
@@ -291,7 +292,7 @@ contract Token is ERC20 {
 
 }
 
-contract ViaUSD is Token{
+contract ViaUSD is Cash{
 
     //name of Via token (eg, Via-USD)
     string public constant name = "Via-USD";
@@ -305,7 +306,7 @@ contract ViaUSD is Token{
         //calling super
         super.issue(amount, buyer);
         //find amount of via tokens to transfer after applying exchange rate
-        via = super.convertToVia(amount, "USD", buyer);
+        via = super.convertToVia(amount, "USD");
         //transfer amount from issuer/sender to buyer 
         transfer(buyer, via);
         //adjust total supply
@@ -319,7 +320,7 @@ contract ViaUSD is Token{
         //calling super
         super.redeem(amount, seller);
         //find amount of ether to transfer after applying via exchange rate
-        eth = super.convertFromVia(amount, "USD", seller);
+        eth = super.convertFromVia(amount, "USD");
         //only if this contract's ether balance is more than ether redeemed
         if(address(this).balance > eth){
             //transfer amount from issuer/sender to seller 
@@ -333,7 +334,7 @@ contract ViaUSD is Token{
 
 }
 
-contract ViaEUR is Token{
+contract ViaEUR is Cash{
 
     //name of Via token (eg, Via-USD)
     string public constant name = "Via-EUR";
@@ -347,7 +348,7 @@ contract ViaEUR is Token{
         //calling super
         super.issue(amount, buyer);
         //find amount of via tokens to transfer after applying exchange rate
-        via = super.convertToVia(amount, "EUR", buyer);
+        via = super.convertToVia(amount, "EUR");
         //transfer amount from issuer/sender to buyer 
         transfer(buyer, via);
         //adjust total supply
@@ -361,7 +362,7 @@ contract ViaEUR is Token{
         //calling super
         super.redeem(amount, seller);
         //find amount of ether to transfer after applying via exchange rate
-        eth = super.convertFromVia(amount, "EUR", seller);
+        eth = super.convertFromVia(amount, "EUR");
         //only if this contract's ether balance is more than ether redeemed
         if(address(this).balance > eth){
             //transfer amount from issuer/sender to seller 
@@ -375,7 +376,7 @@ contract ViaEUR is Token{
 
 }
 
-contract ViaINR is Token{
+contract ViaINR is Cash{
 
     //name of Via token (eg, Via-USD)
     string public constant name = "Via-INR";
@@ -389,7 +390,7 @@ contract ViaINR is Token{
         //calling super
         super.issue(amount, buyer);
         //find amount of via tokens to transfer after applying exchange rate
-        via = super.convertToVia(amount, "INR", buyer);
+        via = super.convertToVia(amount, "INR");
         //transfer amount from issuer/sender to buyer 
         transfer(buyer, via);
         //adjust total supply
@@ -403,7 +404,7 @@ contract ViaINR is Token{
         //calling super
         super.redeem(amount, seller);
         //find amount of ether to transfer after applying via exchange rate
-        eth = super.convertFromVia(amount, "INR", seller);
+        eth = super.convertFromVia(amount, "INR");
         //only if this contract's ether balance is more than ether redeemed
         if(address(this).balance > eth){
             //transfer amount from issuer/sender to seller 
@@ -423,13 +424,26 @@ contract Bond is ERC20{
     //has a borrower and lender that have agreed to a zero coupon rate which is the start price of the bond
     //and a tenure in unix timestamps of seconds counted from 1970-01-01. Via bonds are of one year tenure.
     //constructor for creating Via bond
+    struct loan{
+        address borrower;
+        bytes32 currency;
+        uint256 faceValue;
+        uint256 price;
+        uint256 collateralAmount;
+        bytes32 collateralCurrency;
+        uint timeOfIssue;
+        uint tenure; 
+    }
+
+    mapping(address => loan) public loans;
+
     constructor() public {
         //setting issuer address
         issuer = msg.sender;   
     }
 
     //events to capture and report to Via oracle
-    event lent(bytes32 currency, uint value, uint price);
+    event lent(bytes32 currency, uint value, uint price, uint tenure);
     event redeemed(bytes32 currency, uint value, uint price, uint tenure);
 
     //requesting issue of Via bonds to borrower for amount of ether as collateral
@@ -449,40 +463,120 @@ contract Bond is ERC20{
         require(amount != 0);
     }
 
+    //uses Oraclize to find Via face value of amount passed in currency
+    function convertToVia(uint256 amount, bytes32 currency) public returns(uint256){
+        //only issuer can call oracle
+        require(msg.sender == issuer);
+        //to first convert amount of ether passed to this function to USD
+        uint256 amountInUSD = (amount/1000000000000000000)*uint256(stringToUint(new EthToUSD()));
+        //to then convert USD to Via-currency if currency is not USD itself 
+        if(currency!="USD"){
+            uint256 inVia = amountInUSD * uint256(stringToUint(new ViaRate(+"Via_USD_to_Via_"+currency, "er")));
+            return inVia;
+        }
+        else{
+            return amountInUSD;
+        }
+    }
+
+    //convert Via-currency (eg, Via-EUR, Via-INR, Via-USD) to Ether
+    function convertFromVia(uint256 amount, bytes32 currency) public returns(uint256){
+        //only issuer can call oracle
+        require(msg.sender == issuer);
+        if(currency!="USD"){
+            uint256 amountInViaUSD = amount * uint256(stringToUint(new ViaRate(+"Via_"+currency+"_to_Via_USD","er")));
+            uint256 inEth = amountInViaUSD * (1/uint256(stringToUint(new EthToUSD())));
+            return inEth;
+        }
+        else{
+            uint256 inEth = amount * (1/uint256(stringToUint(new EthToUSD())));
+            return inEth;
+        }
+    }
+
     //uses Oraclize to calculate price of 1 year zero coupon bond in currency and for amount to issue to borrower
-    function getBondValueToIssue(uint256 amount, bytes32 currency, address borrower) public returns(uint256){
-        
+    //to do : we need to support bonds with tenure different than the default 1 year. 
+    //we can do this if we can take tenure as parameter from wallet which we are not doing now.
+    function getBondValueToIssue(uint256 amount, bytes32 currency, uint tenure) public returns(uint256){
+        //only issuer can call oracle
+        require(msg.sender == issuer);
+        //to first convert amount of ether passed to this function to USD
+        uint256 amountInUSD = (amount/1000000000000000000)*uint256(stringToUint(new EthToUSD()));
+        //to then get Via interest rates from oracle and calculate zero coupon bond price
+        if(currency!="USD"){
+            return amountInUSD / (1 + uint256(stringToUint(new ViaRate(+"Via_USD_to_Via_"+currency, "ir")))) ^ tenure;
+        }
+        else{
+            return amountInUSD / (1 + uint256(stringToUint(new ViaRate(+"USD", "ir")))) ^ tenure;
+        }
     }
 
     //calculate price of redeeming zero coupon bond in currency and for amount to borrower who may redeem before end of year
-    function getBondValueToRedeem(uint256 amount, bytes32 currency, address borrower) public returns(uint256){
-        
+    function getBondValueToRedeem(uint256 _amount, bytes32 _currency, address _borrower) public returns(uint256, uint){
+        require(msg.sender == issuer);
+        //find out if bond is present in list of issued bonds
+        uint256 toRedeem;
+        for(uint p=0; p < loans[msg.sender][p].length; p++){
+            //if bond is found to be issued
+            if(loans[msg.sender][p].borrower == _borrower && 
+                loans[msg.sender][p].currency == _currency &&
+                loans[msg.sender][p].price >= amount){
+                    uint timeOfIssue = loans[msg.sender][p].timeOfIssue;
+                    //if entire amount is to be redeemed, remove issued bond from store
+                    if(loans[msg.sender][p].price - amount ==0){
+                        toRedeem = amount;
+                        delete(loans[msg.sender][p]);
+                    }else{
+                        //else, reduce outstanding value of bond
+                        loans[msg.sender][p].price = loans[msg.sender][p].price - amount;
+                    }
+                    return(convertFromVia(toRedeem, _currency), now - timeOfIssue);
+            }
+        }
+        return(0,0);
     }
 
+    function storeIssuedBond(address _borrower, bytes32 _currency, uint256 _facevalue, uint256 _viabond, uint256 _amount, bytes32 _collateralCurrency, uint _timeofissue, uint _tenure){
+        require(msg.sender == issuer);
+        loans[msg.sender][loans.length].borrower = _borrower;
+        loans[msg.sender][loans.length].currency = _currency;
+        loans[msg.sender][loans.length].faceValue = _facevalue;
+        loans[msg.sender][loans.length].price = _viabond;
+        loans[msg.sender][loans.length].collateralAmount = _amount;
+        loans[msg.sender][loans.length].collateralCurrency = _collateralCurrency; //to do : we need to support fiat and Via currencies too
+        loans[msg.sender][loans.length].timeOfIssue = _timeofissue;
+        loans[msg.sender][loans.length].tenure = _tenure; //to do : we need to support different tenures also
+    }
 
 }
 
 contract ViaBondUSD is Bond{
 
     //name of Via bond (eg, ViaBond-USD)
-    string public constant name = "ViaBond-USD";
-    string public constant symbol = "ViaBond-USD";
+    string public constant name = "Via-USD%";
+    string public constant symbol = "Via-USD%";
 
-    uint256 via;
+    uint256 viabond;
+    uint256 facevalue;
     uint256 eth;
+    uint balanceTenure;
 
     //requesting issue of Via bond for amount of ether
     function issue(uint256 amount, address borrower) public override{
         //calling super
         super.issue(amount, borrower);
-        //find amount of via bonds to transfer after applying exchange rate
-        viabond = super.getBondValueToIssue(amount, "USD", borrower);
+        //find face value of bond in via denomination
+        facevalue = super.convertToVia(amount, "USD");
+        //find price of via bonds to transfer after applying exchange rate
+        viabond = super.getBondValueToIssue(amount, "USD", 1); 
         //transfer amount from issuer/sender to borrower 
         transfer(borrower, viabond);
         //adjust total supply
         totalSupply_ += viabond;
+        //keep track of issues
+        storeIssuedBond(borrower, "Via-USD", facevalue, viabond, amount, "ether", now, 1);
         //generate event
-        emit lent(name, amount, viabond);
+        emit lent(name, amount, viabond, 1);
     }
 
     //requesting redemption of Via bonds
@@ -490,7 +584,7 @@ contract ViaBondUSD is Bond{
         //calling super
         super.redeem(amount, borrower);
         //find amount of ether to transfer 
-        eth = super.getBondValueToRedeem(amount, "USD", borrower);
+        var(eth, balanceTenure) = super.getBondValueToRedeem(amount, "USD", borrower);
         //only if this contract's ether balance is more than ether redeemed
         if(address(this).balance > eth){
             //transfer amount from issuer/sender to borrower 
@@ -498,7 +592,7 @@ contract ViaBondUSD is Bond{
             //adjust total supply
             totalSupply_ +- amount;
             //generate event
-            emit redeemed(name, amount, eth, now);
+            emit redeemed(name, amount, eth, balanceTenure);
         }
     }
 }
@@ -506,24 +600,30 @@ contract ViaBondUSD is Bond{
 contract ViaBondEUR is Bond{
 
     //name of Via bond (eg, ViaBond-USD)
-    string public constant name = "ViaBond-EUR";
-    string public constant symbol = "ViaBond-EUR";
+    string public constant name = "Via-EUR%";
+    string public constant symbol = "Via-EUR%";
 
-    uint256 via;
+    uint256 viabond;
+    uint256 facevalue;
     uint256 eth;
+    uint balanceTenure;
 
     //requesting issue of Via bond for amount of ether
     function issue(uint256 amount, address borrower) public override{
         //calling super
         super.issue(amount, borrower);
-        //find amount of via bonds to transfer after applying exchange rate
-        viabond = super.getBondValueToIssue(amount, "EUR", borrower);
+        //find face value of bond in via denomination
+        facevalue = super.convertToVia(amount, "EUR");
+        //find price of via bonds to transfer after applying exchange rate
+        viabond = super.getBondValueToIssue(amount, "EUR", 1); 
         //transfer amount from issuer/sender to borrower 
         transfer(borrower, viabond);
         //adjust total supply
         totalSupply_ += viabond;
+        //keep track of issues
+        storeIssuedBond(borrower, "Via-EUR", facevalue, viabond, amount, "ether", now, 1);
         //generate event
-        emit lent(name, amount, viabond);
+        emit lent(name, amount, viabond, 1);
     }
 
     //requesting redemption of Via bonds
@@ -531,7 +631,7 @@ contract ViaBondEUR is Bond{
         //calling super
         super.redeem(amount, borrower);
         //find amount of ether to transfer 
-        eth = super.getBondValueToRedeem(amount, "EUR", borrower);
+        var(eth, balanceTenure) = super.getBondValueToRedeem(amount, "EUR", borrower);
         //only if this contract's ether balance is more than ether redeemed
         if(address(this).balance > eth){
             //transfer amount from issuer/sender to borrower 
@@ -539,33 +639,38 @@ contract ViaBondEUR is Bond{
             //adjust total supply
             totalSupply_ +- amount;
             //generate event
-            emit redeemed(name, amount, eth, now);
+            emit redeemed(name, amount, eth, balanceTenure);
         }
     }
-
 }
 
 contract ViaBondINR is Bond{
 
     //name of Via bond (eg, ViaBond-USD)
-    string public constant name = "ViaBond-INR";
-    string public constant symbol = "ViaBond-INR";
+    string public constant name = "Via-INR%";
+    string public constant symbol = "Via-INR%";
 
-    uint256 via;
+    uint256 viabond;
+    uint256 facevalue;
     uint256 eth;
+    uint balanceTenure;
 
     //requesting issue of Via bond for amount of ether
     function issue(uint256 amount, address borrower) public override{
         //calling super
         super.issue(amount, borrower);
-        //find amount of via bonds to transfer after applying exchange rate
-        viabond = super.getBondValueToIssue(amount, "INR", borrower);
+        //find face value of bond in via denomination
+        facevalue = super.convertToVia(amount, "INR");
+        //find price of via bonds to transfer after applying exchange rate
+        viabond = super.getBondValueToIssue(amount, "INR", 1); 
         //transfer amount from issuer/sender to borrower 
         transfer(borrower, viabond);
         //adjust total supply
         totalSupply_ += viabond;
+        //keep track of issues
+        storeIssuedBond(borrower, "Via-INR", facevalue, viabond, amount, "ether", now, 1);
         //generate event
-        emit lent(name, amount, viabond);
+        emit lent(name, amount, viabond, 1);
     }
 
     //requesting redemption of Via bonds
@@ -573,7 +678,7 @@ contract ViaBondINR is Bond{
         //calling super
         super.redeem(amount, borrower);
         //find amount of ether to transfer 
-        eth = super.getBondValueToRedeem(amount, "INR", borrower);
+        var(eth, balanceTenure) = super.getBondValueToRedeem(amount, "INR", borrower);
         //only if this contract's ether balance is more than ether redeemed
         if(address(this).balance > eth){
             //transfer amount from issuer/sender to borrower 
@@ -581,10 +686,9 @@ contract ViaBondINR is Bond{
             //adjust total supply
             totalSupply_ +- amount;
             //generate event
-            emit redeemed(name, amount, eth, now);
+            emit redeemed(name, amount, eth, balanceTenure);
         }
     }
-
 }
 
 library SafeMath { // Only relevant functions
@@ -624,14 +728,15 @@ library SafeMath { // Only relevant functions
 }
 
 //taken from Oraclize's examples, with minor modifications
-contract ViaExchangeRate is usingProvable {
+contract ViaRate is usingProvable {
 
     event LogNewProvableQuery(string description);
     event LogResult(string result);
 
     bytes32 currency;
+    bytes32 url;
 
-    constructor(bytes32 _currency)
+    constructor(bytes32 _currency, bytes32 _ratetype)
         public
     {
         provable_setProof(proofType_Android | proofStorage_IPFS);
@@ -677,9 +782,14 @@ contract ViaExchangeRate is usingProvable {
         public
         payable
     {  
+        if(_ratetype == "er")
+            url = "https://via-oracle.azurewebsites.net/api/via/er";
+        else if(_ratetype == "ir")
+            url = "https://via-oracle.azurewebsites.net/api/via/ir";
+
         request("QmdKK319Veha83h6AYgQqhx9YRsJ9MJE7y33oCXyZ4MqHE",
                 "POST",
-                "https://via-oracle.azurewebsites.net/api/via/er",
+                url,
                 '{"json": {"postcodes" : ["'+currency+'"]}}'
                 );
     }
