@@ -3,7 +3,9 @@
 
 pragma solidity >=0.4.16 <0.7.0;
 
-import "./provableAPI.sol";
+import "./oraclize/provableAPI.sol";
+import "./datetime/DayCountConventions.sol";
+import "./datetime/SafeMath.sol";
 
 contract Issuer{
 
@@ -431,7 +433,7 @@ contract Bond is ERC20{
         uint256 price;
         uint256 collateralAmount;
         bytes32 collateralCurrency;
-        uint timeOfIssue;
+        uint256 timeOfIssue;
         uint tenure; 
     }
 
@@ -521,7 +523,7 @@ contract Bond is ERC20{
             if(loans[msg.sender][p].borrower == _borrower && 
                 loans[msg.sender][p].currency == _currency &&
                 loans[msg.sender][p].price >= amount){
-                    uint timeOfIssue = loans[msg.sender][p].timeOfIssue;
+                    uint256 timeOfIssue = loans[msg.sender][p].timeOfIssue;
                     //if entire amount is to be redeemed, remove issued bond from store
                     if(loans[msg.sender][p].price - amount ==0){
                         toRedeem = amount;
@@ -530,7 +532,7 @@ contract Bond is ERC20{
                         //else, reduce outstanding value of bond
                         loans[msg.sender][p].price = loans[msg.sender][p].price - amount;
                     }
-                    return(convertFromVia(toRedeem, _currency), now - timeOfIssue);
+                    return(convertFromVia(toRedeem, _currency), DayCountConventions.diffTime(now, timeOfIssue));
             }
         }
         return(0,0);
@@ -559,7 +561,7 @@ contract ViaBondUSD is Bond{
     uint256 viabond;
     uint256 facevalue;
     uint256 eth;
-    uint balanceTenure;
+    int256 balanceTenure;
 
     //requesting issue of Via bond for amount of ether
     function issue(uint256 amount, address borrower) public override{
@@ -606,7 +608,7 @@ contract ViaBondEUR is Bond{
     uint256 viabond;
     uint256 facevalue;
     uint256 eth;
-    uint balanceTenure;
+    int256 balanceTenure;
 
     //requesting issue of Via bond for amount of ether
     function issue(uint256 amount, address borrower) public override{
@@ -653,7 +655,7 @@ contract ViaBondINR is Bond{
     uint256 viabond;
     uint256 facevalue;
     uint256 eth;
-    uint balanceTenure;
+    int256 balanceTenure;
 
     //requesting issue of Via bond for amount of ether
     function issue(uint256 amount, address borrower) public override{
@@ -691,18 +693,8 @@ contract ViaBondINR is Bond{
     }
 }
 
-library SafeMath { // Only relevant functions
-    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-    assert(b <= a);
-    return a - b;
-    }
-
-    function add(uint256 a, uint256 b) internal pure returns (uint256)   {
-    uint256 c = a + b;
-    assert(c >= a);
-    return c;
-    }
-
+library convertInt { // Only relevant functions
+    
     //added from https://ethereum.stackexchange.com/questions/62371/convert-a-string-to-a-uint256-with-error-handling
     function stringToUint(string s) view returns (uint, bool) {
         bool hasError = false;
