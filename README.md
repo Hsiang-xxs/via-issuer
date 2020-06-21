@@ -18,15 +18,9 @@ This implementation follows the ERC20 standard because we want the Via to be usa
 
 ## Things that need to be looked at 
 
-1. we need wallet users to buy via cash tokens and via bond tokens. while we have got a payable buy() function, will this work in wallets ?
+1. Approval of transfers of cash and bond tokens
 
-2. the buy() function only takes in ether now. How can we enable buyers of via cash tokens and bond tokens to use via cash tokens itself to make purchases of other cash and bond tokens ? Eg, using Via-USD to purchase Via-EUR.
-
-3. whereas we have a sell() function for redemption which takes 'amount' and 'currency' to redeem (eg, redeem 100 Via-USD), how can we accept another parameter that specifies another currency to redeem in (eg, Via-USD to Via-EUR) ? Right now, all redemption is done in ether by default.
-
-4. we want lenders to approve of loans (ie, issue of bonds from their balances) - currently, this is not happening.
-
-5. we want to support 20 fiat currencies eventually atleast, going up from 3 now. The issuing, redemption, borrowing functions now are repeated for each cash and bond currency denomination. perhaps, we can avoid this ?
+2. Client contract that uses contract factory and initializes cash and bond tokens - this will be added in the via wallet repo.
 
 
 *NOTE:* Currently this reference implementation is under development and NOT FOR PRODUCTION.
