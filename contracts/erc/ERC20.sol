@@ -32,12 +32,11 @@ contract ERC20{
         return totalSupply_;
     }
 
-    function balanceOf(address tokenOwner) public view returns (uint256){
+    function balanceOf(address tokenOwner) public view returns (uint){
         return balances[tokenOwner];
     }
 
-    function transfer(address receiver, uint256 tokens) public returns (bool){
-        require(receiver != address(0));
+    function transfer(address receiver, uint tokens) public returns (bool){
         require(tokens <= balances[msg.sender]);
         balances[msg.sender] = balances[msg.sender].sub(tokens);
         balances[receiver] = balances[receiver].add(tokens);
@@ -45,8 +44,7 @@ contract ERC20{
         return true;
     }
 
-    function approve(address spender, uint256 tokens)  public returns (bool){
-        require(spender != address(0));
+    function approve(address spender, uint tokens)  public returns (bool){
         allowed[msg.sender][spender] = tokens;
         emit Approval(msg.sender, spender, tokens);
         return true;
@@ -56,9 +54,7 @@ contract ERC20{
         return allowed[tokenOwner][spender];
     }
 
-    function transferFrom(address owner, address buyer, uint256 tokens) public returns (bool){
-        require(owner != address(0));
-        require(buyer != address(0));
+    function transferFrom(address owner, address buyer, uint tokens) public returns (bool){
         require(tokens <= balances[owner]);
         require(tokens <= allowed[owner][msg.sender]);
         balances[owner] = balances[owner].sub(tokens);
