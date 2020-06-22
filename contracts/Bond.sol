@@ -176,6 +176,7 @@ contract Bond is ERC20, Initializable, Ownable {
         return(0,0);
     }
 
+    function storeIssuedBond(
         address _borrower, 
         bytes32 _currency, 
         uint256 _facevalue, 
