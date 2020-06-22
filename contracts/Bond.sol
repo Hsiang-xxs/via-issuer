@@ -176,16 +176,18 @@ contract Bond is ERC20, Initializable, Ownable {
         return(0,0);
     }
 
-    function storeIssuedBond(address _borrower, bytes32 _currency, uint256 _facevalue, uint256 _viabond, uint256 _amount, bytes32 _collateralCurrency, uint _timeofissue, uint _tenure) internal{
+        address _borrower, 
+        bytes32 _currency, 
+        uint256 _facevalue, 
+        uint256 _viabond, 
+        uint256 _amount, 
+        bytes32 _collateralCurrency, 
+        uint _timeofissue, 
+        uint _tenure) 
+        internal{
         require(msg.sender == owner);
-        loans[msg.sender][loans.length].borrower = _borrower;
-        loans[msg.sender][loans.length].currency = _currency;
-        loans[msg.sender][loans.length].faceValue = _facevalue;
-        loans[msg.sender][loans.length].price = _viabond;
-        loans[msg.sender][loans.length].collateralAmount = _amount;
-        loans[msg.sender][loans.length].collateralCurrency = _collateralCurrency; //to do : we need to support fiat and Via currencies too
-        loans[msg.sender][loans.length].timeOfIssue = _timeofissue;
-        loans[msg.sender][loans.length].tenure = _tenure; //to do : we need to support different tenures also
+        // to do : we need to support fiat, Via currencies and different tenures
+        loans[msg.sender][loans.length] = loan(_borrower, _currency, _facevalue, _viabond, _amount, _collateralCurrency, _timeofissue, _tenure);
     }
 
 }
