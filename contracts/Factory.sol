@@ -12,9 +12,18 @@ contract Factory is ProxyFactory {
     //this issuer's address
     address owner;
 
+    //data structure for token proxies
+    struct via{
+        bytes32 tokenType;
+        bytes32 name;
+    }
+
     //address of Via contracts
-    address public ViaBond;
-    address public ViaCash;
+    address ViaBond;
+    address ViaCash;
+
+    //addresses of all Via proxies
+    mapping(address => via) public tokens;
 
     //constructor that assigns the issuer
     constructor (address _ViaBond, address _ViaCash) public {
@@ -28,10 +37,18 @@ contract Factory is ProxyFactory {
         //issuer can only be one that starts the factory
         require(owner == msg.sender);
         //creates singleton via cash and bond tokens
-        if(contractType == "Cash")
+        if(contractType == "Cash"){
             address proxy = deployMinimal(ViaCash, _data);
-        else if(contractType == "Bond")
+            if(tokens[proxy]==address(0)){
+                tokens[proxy] = via("ViaCash", _data);
+            }
+        }
+        else if(contractType == "Bond"){
             address proxy = deployMinimal(ViaBond, _data);
+            if(tokens[proxy]==address(0)){
+                tokens[proxy] = via("ViaBond", _data);
+            }
+        }
         return proxy;
     }
     
