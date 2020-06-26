@@ -33,9 +33,10 @@ contract Factory is ProxyFactory {
     }
 
     //token factory 
-    function createToken(bytes memory _data, string contractType) public returns (address){
+    function createToken(bytes memory _data) public returns (address){
         //issuer can only be one that starts the factory
         require(owner == msg.sender);
+        //_data has name of via token and owner's address        
         //creates singleton via cash and bond tokens
         if(contractType == "Cash"){
             address proxy = deployMinimal(ViaCash, _data);
