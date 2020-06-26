@@ -12,7 +12,7 @@ import '@openzeppelin/contracts-ethereum-package/contracts/ownership/Ownable.sol
 
 contract Cash is ERC20, Initializable, Ownable {
 
-    //issuer's address
+    //address of factory that initializes this contract
     Factory owner;
 
     //name of Via token (eg, Via-USD)
@@ -27,7 +27,7 @@ contract Cash is ERC20, Initializable, Ownable {
         uint256 balance;
     }
 
-    //cash balances held by issuer
+    //cash balances held by this issuer against which via cash tokens are issued
     mapping(address => cash) private cashbalances;
 
     struct depositor{
@@ -48,6 +48,14 @@ contract Cash is ERC20, Initializable, Ownable {
         owner = Factory(_owner);
         name = _name;
         symbol = _name;
+    }
+
+    //handling pay in of ether for issue of via cash tokens
+    receive() external payable{
+        //ether paid in
+        require(msg.value !=0);
+        //issue via cash tokens
+        issue(msg.value, msg.sender, "ether");
     }
 
     //overriding this function of ERC20 standard
@@ -106,12 +114,12 @@ contract Cash is ERC20, Initializable, Ownable {
             }
         }
         if(!found){
-            cashbalances[address(this)][p].name = buyer;
-            cashbalances[address(this)][p].currency = currency;
+            depositors[address(this)][p].name = buyer;
+            depositors[address(this)][p].currency = currency;
         }
-        //find amount of via tokens to transfer after applying exchange rate
+        //find amount of via cash tokens to transfer after applying exchange rate
         via = convertToVia(amount, currency);
-        //add via to this contract's balance first
+        //add via to this contract's balance first (aka issue them first)
         balances[address(this)].add(via);
         //transfer amount to buyer 
         transfer(buyer, via);
@@ -121,7 +129,7 @@ contract Cash is ERC20, Initializable, Ownable {
         emit sold(name, amount);
     }
 
-    //requesting redemption of Via and transfer of currency via was issued against
+    //requesting redemption of Via cash token and transfer of currency it was issued against
     function redeem(uint256 amount, address seller) private returns(bool){
         //ensure that sold amount is not zero
         require(amount != 0);
@@ -135,12 +143,12 @@ contract Cash is ERC20, Initializable, Ownable {
             }
         }
         if(found){
-            found = false;
             value = convertFromVia(amount, name);
             //only if the issuer's balance of the deposited currency is more than or equal to amount redeemed
             for(uint256 p=0; p<cashbalances[address(this)].length; p++){
+                //check if currency in which redemption is to be done is available in cash balances
                 if(cashbalances[address(this)][p].name == name){
-                    found = true;
+                    //check if currency in which redemption is to be done has sufficient balance
                     if(cashbalances[address(this)][p].balance > value){
                         //deduct amount to be transferred from cash balance
                         cashbalances[address(this)][p].balance -= value;
@@ -160,14 +168,14 @@ contract Cash is ERC20, Initializable, Ownable {
         return false;
     }
     
-    //uses Oraclize 
+    //get Via exchange rates from oracle and convert given currency and amount to via cash token
     function convertToVia(uint256 amount, bytes32 currency) private returns(uint256){
         if(currency=="ether"){
             //to first convert amount of ether passed to this function to USD
             uint256 amountInUSD = (amount/1000000000000000000)*uint256(stringToUint(new EthToUSD()));
             //to then convert USD to Via-currency if currency of this contract is not USD itself 
             if(name!="Via-USD"){
-                uint256 inVia = amountInUSD * uint256(stringToUint(new ViaRate(+"Via_USD_to_Via_"+substring(name,4,6),"er")));
+                uint256 inVia = amountInUSD * uint256(stringToUint(new ViaRate(+"Via_USD_to_"+name,"er")));
                 return inVia;
             }
             else{
@@ -176,7 +184,7 @@ contract Cash is ERC20, Initializable, Ownable {
         }
         //if currency paid in another via currency
         else{
-            uint256 inVia = uint256(stringToUint(new ViaRate(+"Via_USD_to_Via_"+substring(name,4,6),"er")));
+            uint256 inVia = uint256(stringToUint(new ViaRate(+currency+"_to_"+name,"er")));
             return inVia;
         }
     }
@@ -185,13 +193,13 @@ contract Cash is ERC20, Initializable, Ownable {
     function convertFromVia(uint256 amount, bytes32 currency) private returns(uint256){
         //if currency to convert from is ether
         if(currency=="ether"){
-            uint256 amountInViaUSD = amount * uint256(stringToUint(new ViaRate(+"Via_"+substring(name,4,6)+"_to_Via_USD","er")));
+            uint256 amountInViaUSD = amount * uint256(stringToUint(new ViaRate(+name+"_to_Via_USD","er")));
             uint256 inEth = amountInViaUSD * (1/uint256(stringToUint(new EthToUSD())));
             return inEth;
         }
         //else convert to another via currency
         else{
-            return(uint256(stringToUint(new ViaRate(+"Via_"+substring(name,4,6)+"_to"+currency,"er")))*amount);
+            return(uint256(stringToUint(new ViaRate(+name+"_to_"+currency,"er")))*amount);
         }
     }
 
