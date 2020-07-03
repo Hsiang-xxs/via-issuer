@@ -1,7 +1,7 @@
 //taken from Oraclize's examples, with minor modifications
 //(c) Kallol Borah, 2020
 
-pragma solidity >=0.4.16 <0.7.0;
+pragma solidity >=0.5.0 <0.7.0;
 
 import "../oraclize/provableAPI.sol";
 
@@ -25,7 +25,7 @@ contract ViaRate is usingProvable {
         string memory _result,
         bytes memory _proof
     )
-        public returns(string)
+        public returns(string memory)
     {
         require(msg.sender == provable_cbAddress());
         emit LogResult(_result);
@@ -55,7 +55,7 @@ contract ViaRate is usingProvable {
     }
     
     //uses the processing engine for via exchange rates
-    function requestPost()
+    function requestPost(bytes32 _ratetype)
         public
         payable
     {  

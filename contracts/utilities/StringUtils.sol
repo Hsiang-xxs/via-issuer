@@ -1,9 +1,9 @@
-pragma solidity >=0.4.16 <0.7.0;
+pragma solidity >=0.5.0 <0.7.0;
 
 library stringUtils { // Only relevant functions
     
     //added from https://ethereum.stackexchange.com/questions/62371/convert-a-string-to-a-uint256-with-error-handling
-    function StringToUint(string s) public view returns (uint, bool) {
+    function StringToUint(string memory s) public view returns (uint, bool) {
         bool hasError = false;
         bytes memory b = bytes(s);
         uint result = 0;
@@ -25,12 +25,12 @@ library stringUtils { // Only relevant functions
         return (result, hasError); 
     }
 
-    function substring(string str, uint startIndex, uint endIndex) public pure returns (string) {
-      bytes memory strBytes = bytes(str);
-      bytes memory result = new bytes(endIndex-startIndex);
-      for(uint i = startIndex; i < endIndex; i++) {
-          result[i-startIndex] = strBytes[i];
-      }
-      return string(result);
-  }
+    function substring(string memory str, uint startIndex, uint endIndex) public pure returns (string memory) {
+        bytes memory strBytes = bytes(str);
+        bytes memory result = new bytes(endIndex-startIndex);
+        for(uint i = startIndex; i < endIndex; i++) {
+            result[i-startIndex] = strBytes[i];
+        }
+        return string(result);
+    }
 }

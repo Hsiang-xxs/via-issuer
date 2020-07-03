@@ -1,7 +1,7 @@
 //taken from Oraclize's examples, with minor modifications
 //(c) Kallol Borah, 2020
 
-pragma solidity >=0.4.16 <0.7.0;
+pragma solidity >=0.5.0 <0.7.0;
 
 import "../oraclize/provableAPI.sol";
 

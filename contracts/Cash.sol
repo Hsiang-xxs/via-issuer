@@ -1,16 +1,19 @@
 // (c) Kallol Borah, 2020
 // Implementation of the Via cash token.
 
-pragma solidity >=0.4.16 <0.7.0;
+pragma solidity >=0.5.0 <0.7.0;
 
 import "./erc/ERC20.sol";
 import "./oraclize/ViaRate.sol";
 import "./oraclize/EthToUSD.sol";
 import "./utilities/StringUtils.sol";
-import '@openzeppelin/upgrades/contracts/Initializable.sol';
-import '@openzeppelin/contracts-ethereum-package/contracts/ownership/Ownable.sol';
+import "@openzeppelin/upgrades/contracts/Initializable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "./utilities/Strings.sol";
 
 contract Cash is ERC20, Initializable, Ownable {
+
+    using strings for *;
 
     //via token factory address
     Factory owner;
@@ -39,8 +42,8 @@ contract Cash is ERC20, Initializable, Ownable {
     mapping(address => depositor) private depositors;
 
     //events to capture and report to Via oracle
-    event sold(bytes32 currency, uint256 value);
-    event redeemed(bytes32 currency, uint256 value);
+    event ViaCashIssued(bytes32 currency, uint256 value);
+    event ViaCashRedeemed(bytes32 currency, uint256 value);
 
     //initiliaze proxies
     function initialize(bytes32 memory _name, address _owner) public {
@@ -51,7 +54,7 @@ contract Cash is ERC20, Initializable, Ownable {
     }
 
     //handling pay in of ether for issue of via cash tokens
-    receive() external payable{
+    receive() payable public {
         //ether paid in
         require(msg.value !=0);
         //issue via cash tokens
@@ -59,7 +62,7 @@ contract Cash is ERC20, Initializable, Ownable {
     }
 
     //overriding this function of ERC20 standard
-    function transferFrom(address sender, address receiver, uint256 tokens) public override returns (bool){
+    function transferFrom(address sender, address receiver, uint256 tokens) override public returns (bool){
         //owner should have more tokens than being transferred
         require(tokens <= balances[sender]);
         //sending contract should be allowed by token owner to make this transfer
@@ -133,7 +136,7 @@ contract Cash is ERC20, Initializable, Ownable {
         //adjust total supply
         totalSupply_ += via;
         //generate event
-        emit sold(name, amount);
+        emit ViaCashIssued(name, amount);
     }
 
     //requesting redemption of Via cash token and transfer of currency it was issued against
@@ -166,7 +169,7 @@ contract Cash is ERC20, Initializable, Ownable {
                         //adjust total supply
                         totalSupply_ -= amount;
                         //generate event
-                        emit redeemed(name, amount);
+                        emit ViaCashRedeemed(name, amount);
                         return true;
                     }
                 }
@@ -184,7 +187,7 @@ contract Cash is ERC20, Initializable, Ownable {
             uint256 amountInUSD = (amount/1000000000000000000)*uint256(stringToUint(new EthToUSD()));
             //to then convert USD to Via-currency if currency of this contract is not USD itself 
             if(name!="Via-USD"){
-                uint256 inVia = amountInUSD * uint256(stringToUint(new ViaRate(+"Via_USD_to_"+name,"er")));
+                uint256 inVia = amountInUSD * uint256(stringToUint(new ViaRate("Via_USD_to_".toSlice().concat(name.toSlice()),"er")));
                 return inVia;
             }
             else{
@@ -193,7 +196,7 @@ contract Cash is ERC20, Initializable, Ownable {
         }
         //if currency paid in another via currency
         else{
-            uint256 inVia = uint256(stringToUint(new ViaRate(+currency+"_to_"+name,"er")));
+            uint256 inVia = uint256(stringToUint(new ViaRate(currency.toSlice().concat("_to_".toSlice().concat(name.toSlice())),"er")));
             return inVia;
         }
     }
@@ -202,13 +205,13 @@ contract Cash is ERC20, Initializable, Ownable {
     function convertFromVia(uint256 amount, bytes32 currency) private returns(uint256){
         //if currency to convert from is ether
         if(currency=="ether"){
-            uint256 amountInViaUSD = amount * uint256(stringToUint(new ViaRate(+name+"_to_Via_USD","er")));
+            uint256 amountInViaUSD = amount * uint256(stringToUint(new ViaRate(name.toSlice().concat("_to_Via_USD".toSlice()),"er")));
             uint256 inEth = amountInViaUSD * (1/uint256(stringToUint(new EthToUSD())));
             return inEth;
         }
         //else convert to another via currency
         else{
-            return(uint256(stringToUint(new ViaRate(+name+"_to_"+currency,"er")))*amount);
+            return(uint256(stringToUint(new ViaRate(name.toSlice().concat("_to_".toSlice().concat(currency.toSlice())),"er")))*amount);
         }
     }
 

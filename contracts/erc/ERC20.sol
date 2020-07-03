@@ -1,7 +1,7 @@
 // (c) Kallol Borah, 2020
 // Base ERC20 implementation.
 
-pragma solidity >=0.4.16 <0.7.0;
+pragma solidity >=0.5.0 <0.7.0;
 
 import "../utilities/SafeMath.sol";
 
@@ -54,7 +54,7 @@ contract ERC20{
         return allowed[tokenOwner][spender];
     }
 
-    function transferFrom(address owner, address buyer, uint tokens) virtual public returns (bool){
+    function transferFrom(address owner, address buyer, uint tokens) public returns (bool){
         require(tokens <= balances[owner]);
         require(tokens <= allowed[owner][msg.sender]);
         balances[owner] = balances[owner].sub(tokens);

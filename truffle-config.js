@@ -11,6 +11,11 @@ module.exports = {
             network_id: "*", // Any network (default: none)
             websockets: true
         }
+    },
+    compilers: {
+        solc: {
+           version: "0.6.0", 
+        }
     }
 };
 
