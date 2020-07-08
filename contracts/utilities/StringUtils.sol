@@ -1,9 +1,9 @@
 pragma solidity >=0.5.0 <0.7.0;
 
-library stringUtils { // Only relevant functions
+library stringutils { // Only relevant functions
     
     //added from https://ethereum.stackexchange.com/questions/62371/convert-a-string-to-a-uint256-with-error-handling
-    function StringToUint(string memory s) public view returns (uint, bool) {
+    function stringToUint(string memory s) public view returns (uint, bool) {
         bool hasError = false;
         bytes memory b = bytes(s);
         uint result = 0;

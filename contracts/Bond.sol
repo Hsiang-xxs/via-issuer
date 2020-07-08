@@ -5,19 +5,21 @@ pragma solidity >=0.5.0 <0.7.0;
 
 import "./erc/ERC20.sol";
 import "./oraclize/ViaRate.sol";
+import "./oraclize/EthToUSD.sol";
 import "./utilities/DayCountConventions.sol";
 import "./utilities/SafeMath.sol";
 import "./utilities/StringUtils.sol";
 import "@openzeppelin/upgrades/contracts/Initializable.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/ownership/Ownable.sol";
 import "./utilities/Strings.sol";
 
 contract Bond is ERC20, Initializable, Ownable {
 
     using strings for *;
+    using stringutils for *;
 
     //via token factory address
-    Factory owner;
+    address producer;
 
     //name of Via token (eg, Via-USD%)
     bytes32 public name;
@@ -25,8 +27,7 @@ contract Bond is ERC20, Initializable, Ownable {
 
     uint256 viaBondPrice;
     uint256 faceValue;
-    uint256 redemptionAmount;
-    int256 balanceTenure;
+    
 
     struct cash{
         bytes32 name;
@@ -51,22 +52,22 @@ contract Bond is ERC20, Initializable, Ownable {
         uint tenure; 
     }
 
-    mapping(address => loan) public loans;
+    mapping(address => loan[]) public loans;
 
     //events to capture and report to Via oracle
     event ViaBondIssued(bytes32 currency, uint value, uint price, uint tenure);
     event ViaBondRedeemed(bytes32 currency, uint value, uint price, uint tenure);
 
     //initiliaze proxies
-    function initialize(bytes32 memory _name, address _owner) public {
+    function initialize(bytes32 _name, address _owner) public {
         Ownable.initialize(_owner);
-        owner = Factory(_owner);
+        producer = _owner;
         name = _name;
         symbol = _name;
     }    
 
     //handling pay in of ether for issue of via bond tokens
-    receive() payable public{
+    function() payable public{
         //ether paid in
         require(msg.value !=0);
         //issue via bond tokens
@@ -74,7 +75,7 @@ contract Bond is ERC20, Initializable, Ownable {
     }
 
     //overriding this function of ERC20 standard
-    function transferFrom(address sender, address receiver, uint256 tokens) override public returns (bool){
+    function transferFrom(address sender, address receiver, uint256 tokens) public returns (bool){
         //owner should have more tokens than being transferred
         require(tokens <= balances[sender]);
         //sending contract should be allowed by token owner to make this transfer
@@ -116,8 +117,9 @@ contract Bond is ERC20, Initializable, Ownable {
         //ensure that brought amount is not zero
         require(amount != 0);
         bool found = false;
+        uint256 p=0;
         //adds paid in currency to this contract's cash balance
-        for(uint256 p=0; p<cashbalances[address(this)].length; p++){
+        for(p=0; p<cashbalances[address(this)].length; p++){
             if(cashbalances[address(this)][p].name == currency){
                 cashbalances[address(this)][p].amount += amount;
                 found = true;
@@ -150,21 +152,22 @@ contract Bond is ERC20, Initializable, Ownable {
         require(amount != 0);
         //find currency that borrower had deposited earlier
         bool found = false;
-        bytes32 name;
+        bytes32 currency;
+
         for(uint256 p=0; p<loans[address(this)].length; p++){
             if(loans[address(this)][p].borrower == borrower){
-                name = loans[address(this)][p].currency;
+                currency = loans[address(this)][p].currency;
                 found = true;
             }
         }
         if(found){
             found = false;
             //find redemption amount to transfer 
-            var(redemptionAmount, balanceTenure) = getBondValueToRedeem(amount, name, borrower);
+            var(redemptionAmount, balanceTenure) = getBondValueToRedeem(amount, currency, borrower);
             //only if the issuer's balance of the deposited currency is more than or equal to amount redeemed
             for(uint256 p=0; p<cashbalances[address(this)].length; p++){
                 //check if currency in which redemption is to be done is available in cash balances
-                if(cashbalances[address(this)][p].name == name){
+                if(cashbalances[address(this)][p].name == currency){
                     //check if currency in which redemption is to be done has sufficient balance
                     if(cashbalances[address(this)][p].balance > redemptionAmount){
                         //deduct amount to be transferred from cash balance
@@ -174,7 +177,7 @@ contract Bond is ERC20, Initializable, Ownable {
                         //adjust total supply
                         totalSupply_ =- amount;
                         //generate event
-                        emit ViaBondRedeemed(name, amount, redemptionAmount, balanceTenure);
+                        emit ViaBondRedeemed(currency, amount, redemptionAmount, balanceTenure);
                         return true;
                     }
                 }
@@ -189,10 +192,10 @@ contract Bond is ERC20, Initializable, Ownable {
     function convertToVia(uint256 amount, bytes32 currency) private returns(uint256){
         if(currency=="ether"){
             //to first convert amount of ether passed to this function to USD
-            uint256 amountInUSD = (amount/1000000000000000000)*uint256(stringToUint(new EthToUSD()));
+            uint256 amountInUSD = (amount/1000000000000000000)*uint256(new EthToUSD().stringToUint());
             //to then convert USD to Via-currency if currency is not USD itself 
             if(name!="Via-USD"){
-                uint256 inVia = amountInUSD * uint256(stringToUint(new ViaRate("Via_USD_to_".toSlice().concat(name.toSlice()), "er")));
+                uint256 inVia = amountInUSD * uint256(new ViaRate("Via_USD_to_".toSlice().concat(name.toSlice()), "er").stringToUint());
                 return inVia;
             }
             else{
@@ -201,7 +204,7 @@ contract Bond is ERC20, Initializable, Ownable {
         }
         //if currency paid in another via currency
         else{
-            uint256 inVia = uint256(stringToUint(new ViaRate(currency.toSlice().concat("_to_".toSlice().concat(name.toSlice())),"er")));
+            uint256 inVia = uint256(new ViaRate(currency.toSlice().concat("_to_".toSlice().concat(name.toSlice())),"er").stringToUint());
             return inVia;
         }
     }
@@ -210,13 +213,13 @@ contract Bond is ERC20, Initializable, Ownable {
     function convertFromVia(uint256 amount, bytes32 currency) private returns(uint256){
         //if currency to convert from is ether
         if(currency=="ether"){
-            uint256 amountInViaUSD = amount * uint256(stringToUint(new ViaRate(name.toSlice().concat("_to_Via_USD".toSlice()),"er")));
-            uint256 inEth = amountInViaUSD * (1/uint256(stringToUint(new EthToUSD())));
+            uint256 amountInViaUSD = amount * uint256(new ViaRate(name.toSlice().concat("_to_Via_USD".toSlice()),"er").stringToUint());
+            uint256 inEth = amountInViaUSD * (1/uint256(new EthToUSD().stringToUint()));
             return inEth;
         }
         //else convert to another via currency
         else{
-            return(uint256(stringToUint(new ViaRate(name.toSlice().concat("_to_".toSlice().concat(currency.toSlice())),"er")))*amount);
+            return(uint256(new ViaRate(name.toSlice().concat("_to_".toSlice().concat(currency.toSlice())),"er").stringToUint())*amount);
         }
     }
 
@@ -224,13 +227,13 @@ contract Bond is ERC20, Initializable, Ownable {
     //to do : we need to support bonds with tenure different than the default 1 year. 
     function getBondValueToIssue(uint256 amount, bytes32 currency, uint tenure) private returns(uint256){
         //to first convert amount of ether passed to this function to USD
-        uint256 amountInUSD = (amount/1000000000000000000)*uint256(stringToUint(new EthToUSD()));
+        uint256 amountInUSD = (amount/1000000000000000000)*uint256(new EthToUSD().stringToUint());
         //to then get Via interest rates from oracle and calculate zero coupon bond price
         if(currency!="Via-USD"){
-            return amountInUSD / (1 + uint256(stringToUint(new ViaRate("Via_USD_to_".toSlice().concat(currency.toSlice()), "ir")))) ^ tenure;
+            return amountInUSD / (1 + uint256(new ViaRate("Via_USD_to_".toSlice().concat(currency.toSlice()), "ir").stringToUint())) ^ tenure;
         }
         else{
-            return amountInUSD / (1 + uint256(stringToUint(new ViaRate("USD", "ir")))) ^ tenure;
+            return amountInUSD / (1 + uint256(new ViaRate("USD", "ir").stringToUint())) ^ tenure;
         }
     }
 
@@ -242,15 +245,15 @@ contract Bond is ERC20, Initializable, Ownable {
             //if bond is found to be issued
             if(loans[msg.sender][p].borrower == _borrower && 
                 loans[msg.sender][p].currency == _currency &&
-                loans[msg.sender][p].price >= amount){
+                loans[msg.sender][p].price >= _amount){
                     uint256 timeOfIssue = loans[msg.sender][p].timeOfIssue;
                     //if entire amount is to be redeemed, remove issued bond from store
-                    if(loans[msg.sender][p].price - amount ==0){
-                        toRedeem = amount;
+                    if(loans[msg.sender][p].price - _amount ==0){
+                        toRedeem = _amount;
                         delete(loans[msg.sender][p]);
                     }else{
                         //else, reduce outstanding value of bond
-                        loans[msg.sender][p].price = loans[msg.sender][p].price - amount;
+                        loans[msg.sender][p].price = loans[msg.sender][p].price - _amount;
                     }
                     return(convertFromVia(toRedeem, _currency), DayCountConventions.diffTime(now, timeOfIssue));
             }

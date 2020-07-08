@@ -23,7 +23,7 @@ contract EthToUSD is usingProvable {
         string memory _result,
         bytes memory _proof
     )
-        public returns (string)
+        public returns (string memory)
     {
         require(msg.sender == provable_cbAddress());
         emit LogNewKrakenPriceTicker(_result);
