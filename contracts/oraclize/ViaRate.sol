@@ -3,21 +3,30 @@
 
 pragma solidity >=0.5.0 <0.7.0;
 
-import "../oraclize/provableAPI.sol";
+import "./provableAPI.sol";
+import "../utilities/StringUtils.sol";
+import "../Cash.sol";
+import "../Bond.sol";
 
 contract ViaRate is usingProvable {
+
+    using stringutils for *;
+
+    struct params{
+        address payable caller;
+        bytes32 tokenType;
+        bytes32 rateType;
+    }
+
+    mapping (bytes32 => params) public pendingQueries;
 
     event LogNewProvableQuery(string description);
     event LogResult(string result);
 
-    bytes32 currency;
-    bytes32 url;
-
-    constructor(bytes32 _currency, bytes32 _ratetype)
+    constructor()
         public
     {
-        provable_setProof(proofType_Android | proofStorage_IPFS);
-        currency = _currency;
+        provable_setProof(proofType_TLSNotary | proofStorage_IPFS);
     }
 
     function __callback(
@@ -25,50 +34,44 @@ contract ViaRate is usingProvable {
         string memory _result,
         bytes memory _proof
     )
-        public returns(string memory)
+        public 
     {
         require(msg.sender == provable_cbAddress());
+        require (pendingQueries[_myid].tokenType == "Cash" || pendingQueries[_myid].tokenType == "Bond");
         emit LogResult(_result);
-        return _result;
-    }
-
-    function request(
-        string memory _query,
-        string memory _method,
-        string memory _url,
-        string memory _kwargs
-    )
-        public
-        payable
-    {
-        if (provable_getPrice("computation") > address(this).balance) {
-            emit LogNewProvableQuery("Provable query was NOT sent, please add some ETH to cover for the query fee");
-        } else {
-            emit LogNewProvableQuery("Provable query was sent, standing by for the answer...");
-            provable_query("computation",
-                [_query,
-                _method,
-                _url,
-                _kwargs]
-            );
+        if(pendingQueries[_myid].tokenType == "Cash"){
+            Cash cash = Cash(pendingQueries[_myid].caller);
+            cash.convert(_myid, _result.stringToUint(), pendingQueries[_myid].rateType);
         }
+        else {
+            Bond bond = Bond(pendingQueries[_myid].caller);
+            bond.convert(_myid, _result.stringToUint(), pendingQueries[_myid].rateType);
+        }
+        delete pendingQueries[_myid]; 
     }
-    
+
     //uses the processing engine for via exchange rates
-    function requestPost(bytes32 _ratetype)
+    function requestPost(bytes memory _currency, bytes32 _ratetype, bytes32 _tokenType, address payable _tokenContract)
         public
         payable
+        returns (bytes32)
     {  
-        if(_ratetype == "er")
-            url = "https://via-oracle.azurewebsites.net/api/via/er";
-        else if(_ratetype == "ir")
-            url = "https://via-oracle.azurewebsites.net/api/via/ir";
-
-        request("QmdKK319Veha83h6AYgQqhx9YRsJ9MJE7y33oCXyZ4MqHE",
-                "POST",
-                url,
-                '{"json": {"postcodes" : ["'+currency+'"]}}'
-                );
+        if (provable_getPrice("URL") > address(this).balance) {
+            emit LogNewProvableQuery("Provable query was NOT sent, please add some ETH to cover for the query fee!");
+        } else {
+            emit LogNewProvableQuery("Provable query was sent for Via rates, standing by for the answer...");
+            if(_ratetype == "er"){
+                bytes32 queryId = provable_query("URL", "oracleurlhere");
+                pendingQueries[queryId] = params(_tokenContract, _tokenType, _ratetype);
+                return queryId;
+            }
+            else if(_ratetype == "ir"){
+                bytes32 queryId = provable_query("URL", "oracleurlhere");
+                pendingQueries[queryId] = params(_tokenContract, _tokenType, _ratetype);
+                return queryId;
+            }
+        }
+        
     }
 
 }

@@ -16,6 +16,10 @@ contract DayCountConventions {
     using SignedSafeMath for int;
     using SignedMath for int;
 
+    constructor()
+        public
+    { }
+
     /**
      * Returns the fraction of the year between two timestamps.
      */

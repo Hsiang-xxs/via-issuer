@@ -9,9 +9,6 @@ import "@openzeppelin/upgrades/contracts/upgradeability/ProxyFactory.sol";
 
 contract Factory is ProxyFactory {
 
-    //this issuer's address
-    address owner;
-
     //data structure for token proxies
     struct via{
         bytes32 tokenType;
@@ -23,34 +20,46 @@ contract Factory is ProxyFactory {
     address ViaCash;
 
     //addresses of all Via proxies
-    mapping(address => via) public tokens;
+    mapping(address => via) public token;
 
-    //constructor that assigns the issuer
-    constructor (address _ViaBond, address _ViaCash) public {
-        owner = msg.sender;
-        ViaBond = _ViaBond;
-        ViaCash = _ViaCash;
+    address[] public tokens;
+
+    event TokenCreated(address indexed _address, bytes32 tokenName, bytes32 tokenType);
+
+    function getTokenCount() public view returns(uint tokenCount) {
+        return tokens.length;
+    }
+
+    function getName(address viaAddress) public view returns(bytes32) {
+        return token[viaAddress].name;
+    }
+
+    function getType(address viaAddress) public view returns(bytes32) {
+        return token[viaAddress].tokenType;
     }
 
     //token factory 
-    function createToken(bytes memory _data) public returns (address){
-        //issuer can only be one that starts the factory
-        require(owner == msg.sender);
-        //_data has name of via token and owner's address        
-        //creates singleton via cash and bond tokens
-        if(contractType == "Cash"){
-            address proxy = deployMinimal(ViaCash, _data);
-            if(tokens[proxy]==address(0)){
-                tokens[proxy] = via("ViaCash", _data);
-            }
+    function createToken(address _target, bytes32 tokenName, bytes32 tokenType) external{
+        address _owner = msg.sender;
+
+        bytes memory _payload = abi.encodeWithSignature("initialize(bytes32,address)", tokenName, _owner);
+
+        // Deploy proxy
+        address _via = deployMinimal(_target, _payload);
+        emit TokenCreated(_via, tokenName, tokenType);
+
+        if(tokenType == "Cash"){
+            //if(token[_via]==address(0)){
+                token[_via] = via("ViaCash", tokenName);
+                tokens.push(_via);
+            //}
         }
-        else if(contractType == "Bond"){
-            address proxy = deployMinimal(ViaBond, _data);
-            if(tokens[proxy]==address(0)){
-                tokens[proxy] = via("ViaBond", _data);
-            }
+        else if(tokenType == "Bond"){
+            //if(token[_via]==address(0)){
+                token[_via] = via("ViaBond", tokenName);
+                tokens.push(_via);
+            //}
         }
-        return proxy;
     }
     
 }
