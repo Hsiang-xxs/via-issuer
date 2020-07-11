@@ -9,7 +9,7 @@ import "./oraclize/EthToUSD.sol";
 import "./utilities/StringUtils.sol";
 import "./Factory.sol";
 import "@openzeppelin/upgrades/contracts/Initializable.sol";
-import "@openzeppelin/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/ownership/Ownable.sol";
 
 contract Cash is ERC20, Initializable, Ownable {
 
@@ -63,7 +63,7 @@ contract Cash is ERC20, Initializable, Ownable {
 
     //initiliaze proxies
     function initialize(bytes32 _name, address _owner) public {
-        //Ownable.initialize(_owner);
+        Ownable.initialize(_owner);
         factory = Factory(_owner);
         name = _name;
         symbol = _name;
