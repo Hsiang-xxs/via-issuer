@@ -54,7 +54,7 @@ contract ERC20{
         return allowed[tokenOwner][spender];
     }
 
-    function transferFrom(address owner, address buyer, uint tokens) public returns (bool){
+    function transferFrom(address owner, address buyer, uint tokens) public virtual returns (bool){
         require(tokens <= balances[owner]);
         require(tokens <= allowed[owner][msg.sender]);
         balances[owner] = balances[owner].sub(tokens);

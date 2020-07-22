@@ -1,5 +1,5 @@
-const HDWalletProvider = require("truffle-hdwallet-provider");
-const fs = require("fs");
+// const HDWalletProvider = require("truffle-hdwallet-provider");
+// const fs = require("fs");
 
 module.exports = {
     // See <http://truffleframework.com/docs/advanced/configuration>
@@ -15,7 +15,12 @@ module.exports = {
     compilers: {
         solc: {
            version: "0.5.7", 
+           settings: {
+               optimizer: {
+                   enabled: true,
+                   runs: 200
+               }
+           }
         }
     }
 };
-
