@@ -9,7 +9,7 @@ import "./oraclize/EthToUSD.sol";
 import "./utilities/StringUtils.sol";
 import "./Factory.sol";
 import "@openzeppelin/upgrades/contracts/Initializable.sol";
-import "@openzeppelin/upgrades/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/ownership/Ownable.sol";
 
 contract Cash is ERC20, Initializable, Ownable {
 
@@ -70,7 +70,7 @@ contract Cash is ERC20, Initializable, Ownable {
     }
 
     //handling pay in of ether for issue of via cash tokens
-    receive() external payable{
+    function() external payable{
         //ether paid in
         require(msg.value !=0);
         //issue via cash tokens
@@ -78,7 +78,7 @@ contract Cash is ERC20, Initializable, Ownable {
     }
 
     //overriding this function of ERC20 standard
-    function transferFrom(address sender, address receiver, uint256 tokens) public override returns (bool){
+    function transferFrom(address sender, address receiver, uint256 tokens) public returns (bool){
         //owner should have more tokens than being transferred
         require(tokens <= balances[sender]);
         //sending contract should be allowed by token owner to make this transfer
