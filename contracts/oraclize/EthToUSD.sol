@@ -26,7 +26,7 @@ contract EthToUSD is usingProvable {
     constructor()
         public
     {
-        provable_setProof(proofType_TLSNotary | proofStorage_IPFS);
+        // provable_setProof(proofType_TLSNotary | proofStorage_IPFS);
     }
 
     function __callback(
