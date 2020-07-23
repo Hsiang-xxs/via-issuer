@@ -15,6 +15,29 @@ This implementation follows the ERC20 standard because we want the Via to be usa
 
 5. Exchange rates between Via cash token pairs and Interest rates on Via bond tokens are calculated externally to this system (the Via oracle). The Via oracle captures events emitted by the issuer (eg, sold, lent, redeemed) and uses them in combination with prevailing interest and exchange rates between fiat currency pairs to price Via cash and bond tokens. This pricing is available to the issuer in turn using an Oracle contract.
 
+### Steps
+
+ to build and deploy
+1.  To compile the project, change to the root of the directory where the project is located:\
+``` cd <the root of the directory where the project is located> ```
+
+
+
+2.  ``` truffle compile ```
+
+
+
+3.  For local testing make sure to have a test blockchain such as Ganache or [Ganache Cli] installed and running before executing migrate.
+Here we use the [Ganache Cli] for the test. So we should open the new terminal window and run the ganache-cli first:\
+``` ganache-cli --allowUnlimitedContractSize ```
+
+
+
+4.  ``` truffle migrate ```
+
+
+
+[Ganache Cli]: https://github.com/trufflesuite/ganache-cli
 
 
 
