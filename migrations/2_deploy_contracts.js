@@ -35,6 +35,18 @@ module.exports = function(deployer) {
         await factory.createToken(bond.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Bond"));
         await factory.createToken(bond.address, web3.utils.utf8ToHex("Via-EUR"), web3.utils.utf8ToHex("Bond"));
         await factory.createToken(bond.address, web3.utils.utf8ToHex("Via-INR"), web3.utils.utf8ToHex("Bond"));
+
+        for (let i=0; i<6; i++) {
+            var factoryTokenAddress = await factory.tokens(i);
+            if (i<3){
+                var cashInstance = await Cash.at(factoryTokenAddress); 
+            }
+            else {
+                var bondInstance = await Bond.at(factoryTokenAddress); 
+            }
+            console.log(factoryTokenAddress);
+            console.log(await factory.token(factoryTokenAddress));
+         }
     });
 }
 
