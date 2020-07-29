@@ -7,6 +7,7 @@ import "./provableAPI.sol";
 import "../utilities/StringUtils.sol";
 import "../Cash.sol";
 import "../Bond.sol";
+import "abdk-libraries-solidity/ABDKMathQuad.sol";
 
 //taken from Oraclize's examples, with minor modifications
 contract EthToUSD is usingProvable {
@@ -41,11 +42,11 @@ contract EthToUSD is usingProvable {
         emit LogNewETHPriceTicker(_result);
         if(pendingQueries[_myid].tokenType == "Cash"){
             Cash cash = Cash(pendingQueries[_myid].caller);
-            cash.convert(_myid, _result.stringToUint(), "ethusd");
+            cash.convert(_myid, ABDKMathQuad.fromUInt(_result.stringToUint()), "ethusd");
         }
         else {
             Bond bond = Bond(pendingQueries[_myid].caller);
-            bond.convert(_myid, _result.stringToUint(), "ethusd");
+            bond.convert(_myid, ABDKMathQuad.fromUInt(_result.stringToUint()), "ethusd");
         }
         delete pendingQueries[_myid];
     }

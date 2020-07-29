@@ -7,8 +7,8 @@ import "./erc/ERC20.sol";
 import "./oraclize/ViaRate.sol";
 import "./oraclize/EthToUSD.sol";
 import "./utilities/DayCountConventions.sol";
-import "./utilities/SafeMath.sol";
 import "./utilities/StringUtils.sol";
+import "abdk-libraries-solidity/ABDKMathQuad.sol";
 import "@openzeppelin/upgrades/contracts/Initializable.sol";
 import "@openzeppelin/contracts-ethereum-package/contracts/ownership/Ownable.sol";
 import "./Factory.sol";
@@ -16,6 +16,7 @@ import "./Factory.sol";
 contract Bond is ERC20, Initializable, Ownable {
 
     using stringutils for *;
+    using ABDKMathQuad for *;
 
     //via token factory address
     Factory private factory;
@@ -26,7 +27,7 @@ contract Bond is ERC20, Initializable, Ownable {
 
     struct cash{
         bytes32 name;
-        uint256 balance;
+        bytes16 balance;
     }
 
     //cash balances held by this issuer against which via bond tokens are issued
@@ -39,12 +40,12 @@ contract Bond is ERC20, Initializable, Ownable {
     struct loan{
         address borrower;
         bytes32 currency;
-        uint256 faceValue;
-        uint256 price;
-        uint256 collateralAmount;
+        bytes16 faceValue;
+        bytes16 price;
+        bytes16 collateralAmount;
         bytes32 collateralCurrency;
         uint256 timeOfIssue;
-        uint tenure; 
+        bytes16 tenure; 
     }
 
     mapping(address => loan[]) public loans;
@@ -57,14 +58,14 @@ contract Bond is ERC20, Initializable, Ownable {
     struct conversion{
         bytes32 operation;
         address party;
-        uint256 amount;
+        bytes16 amount;
         bytes32 currency;
         bytes32 EthXid;
-        uint256 EthXvalue;
+        bytes16 EthXvalue;
         bytes32 name;
-        uint256 ViaXvalue;
+        bytes16 ViaXvalue;
         bytes32 ViaRateId;
-        uint256 ViaRateValue;
+        bytes16 ViaRateValue;
     }
 
     mapping(bytes32 => conversion) private conversionQ;
@@ -88,20 +89,20 @@ contract Bond is ERC20, Initializable, Ownable {
         //ether paid in
         require(msg.value !=0);
         //issue via bond tokens
-        issue(msg.value, msg.sender, "ether");
+        issue(ABDKMathQuad.fromUInt(msg.value), msg.sender, "ether");
     }
 
     //overriding this function of ERC20 standard
     function transferFrom(address sender, address receiver, uint256 tokens) public returns (bool){
         //owner should have more tokens than being transferred
-        require(tokens <= balances[sender]);
+        require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), balances[sender])==-1 || ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), balances[sender])==0);
         //sending contract should be allowed by token owner to make this transfer
-        require(tokens <= allowed[sender][msg.sender]);
+        require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), allowed[sender][msg.sender])==-1 || ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), allowed[sender][msg.sender])==0);
         //check if tokens are being transferred to this bond contract
         if(receiver == address(this)){ 
             //if token name is the same, this transfer has to be redeemed
             if(Bond(address(msg.sender)).name()==name){ 
-                if(redeem(tokens, receiver))
+                if(redeem(ABDKMathQuad.fromUInt(tokens), receiver))
                     return true;
                 else
                     return false;
@@ -113,7 +114,7 @@ contract Bond is ERC20, Initializable, Ownable {
                     address viaAddress = factory.tokens(p);
                     if(factory.getName(viaAddress) == Bond(address(msg.sender)).name() &&
                         factory.getType(viaAddress) != "ViaBond"){
-                        issue(tokens, receiver, Bond(address(msg.sender)).name());
+                        issue(ABDKMathQuad.fromUInt(tokens), receiver, Bond(address(msg.sender)).name());
                         return true;
                     }
                 }
@@ -122,16 +123,16 @@ contract Bond is ERC20, Initializable, Ownable {
         } 
         else { 
             //tokens are being sent to a user account
-            balances[sender] = balances[sender].sub(tokens);
-            allowed[sender][msg.sender] = allowed[sender][msg.sender].sub(tokens);
-            balances[receiver] = balances[receiver].add(tokens);
+            balances[sender] = ABDKMathQuad.sub(balances[sender], ABDKMathQuad.fromUInt(tokens));
+            allowed[sender][msg.sender] = ABDKMathQuad.sub(allowed[sender][msg.sender], ABDKMathQuad.fromUInt(tokens));
+            balances[receiver] = ABDKMathQuad.add(balances[receiver], ABDKMathQuad.fromUInt(tokens));
             emit Transfer(sender, receiver, tokens);
             return true;
         }                
     }
 
     //requesting issue of Via bonds to borrower for amount of paid in currency as collateral
-    function issue(uint256 amount, address borrower, bytes32 currency) private {
+    function issue(bytes16 amount, address borrower, bytes32 currency) private {
         //ensure that brought amount is not zero
         require(amount != 0);
         bool found = false;
@@ -139,7 +140,7 @@ contract Bond is ERC20, Initializable, Ownable {
         //adds paid in currency to this contract's cash balance
         for(p=0; p<cashbalances[address(this)].length; p++){
             if(cashbalances[address(this)][p].name == currency){
-                cashbalances[address(this)][p].balance += amount;
+                cashbalances[address(this)][p].balance = ABDKMathQuad.add(cashbalances[address(this)][p].balance, amount);
                 found = true;
             }
         }
@@ -163,7 +164,7 @@ contract Bond is ERC20, Initializable, Ownable {
                 ViaRateId = new ViaRate().requestPost("USD", "ir","Bond",address(this));
             }
         }
-        conversionQ[ViaXid] = conversion("issue", borrower, amount, currency, EthXid, 0, name, 0, ViaRateId, 0);
+        conversionQ[ViaXid] = conversion("issue", borrower, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0), ViaRateId, ABDKMathQuad.fromUInt(0));
         conversions.push(ViaXid);
 
         //find face value of bond in via denomination
@@ -175,7 +176,7 @@ contract Bond is ERC20, Initializable, Ownable {
 
     //requesting redemption of Via bonds and transfer of ether or via cash collateral to borrower 
     //to do : redemption of Via bonds for fiat currency
-    function redeem(uint256 amount, address borrower) private returns(bool){
+    function redeem(bytes16 amount, address borrower) private returns(bool){
         //ensure that sold amount is not zero
         require(amount != 0);
         //find currency that borrower had deposited earlier
@@ -197,7 +198,7 @@ contract Bond is ERC20, Initializable, Ownable {
             else{
                 ViaXid = new ViaRate().requestPost(abi.encodePacked(name, "_to_", currency),"er","Bond", address(this));
             }
-            conversionQ[ViaXid] = conversion("redeem", borrower, amount, currency, EthXid, 0, name, 0, 0, 0);
+            conversionQ[ViaXid] = conversion("redeem", borrower, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0));
             conversions.push(ViaXid);
 
             //find redemption amount to transfer 
@@ -208,7 +209,7 @@ contract Bond is ERC20, Initializable, Ownable {
     }
 
     //function called back from Oraclize
-    function convert(bytes32 txId, uint256 result, bytes32 rtype) public {
+    function convert(bytes32 txId, bytes16 result, bytes32 rtype) public {
         //check type of result returned
         if(rtype =="ethusd"){
             conversionQ[txId].EthXvalue = result;
@@ -224,60 +225,61 @@ contract Bond is ERC20, Initializable, Ownable {
         }
         //check if bond needs to be issued or redeemed
         if(conversionQ[txId].operation=="issue"){
-            if(conversionQ[txId].EthXvalue!=0 && conversionQ[txId].ViaXvalue!=0 && conversionQ[txId].ViaRateValue!=0){
-                uint256 faceValue = convertToVia(conversionQ[txId].amount, conversionQ[txId].currency,conversionQ[txId].EthXvalue,result);
-                uint256 viaBondPrice = getBondValueToIssue(faceValue, conversionQ[txId].currency, 1, conversionQ[txId].EthXvalue, conversionQ[txId].ViaXvalue);
+            if(ABDKMathQuad.cmp(conversionQ[txId].EthXvalue, ABDKMathQuad.fromUInt(0))!=0 && 
+                ABDKMathQuad.cmp(conversionQ[txId].ViaXvalue, ABDKMathQuad.fromUInt(0))!=0 && ABDKMathQuad.cmp(conversionQ[txId].ViaRateValue, ABDKMathQuad.fromUInt(0))!=0){
+                bytes16 faceValue = convertToVia(conversionQ[txId].amount, conversionQ[txId].currency,conversionQ[txId].EthXvalue,result);
+                bytes16 viaBondPrice = getBondValueToIssue(faceValue, conversionQ[txId].currency, ABDKMathQuad.fromUInt(1), conversionQ[txId].EthXvalue, conversionQ[txId].ViaXvalue);
                 finallyIssue(viaBondPrice, faceValue, txId);
             }
         }
         else if(conversionQ[txId].operation=="redeem"){
-            if(conversionQ[txId].EthXvalue!=0 && conversionQ[txId].ViaXvalue!=0){
-                (uint256 redemptionAmount, uint balanceTenure) = getBondValueToRedeem(conversionQ[txId].amount, conversionQ[txId].currency, conversionQ[txId].party,conversionQ[txId].EthXvalue, result);
+            if(ABDKMathQuad.cmp(conversionQ[txId].EthXvalue, ABDKMathQuad.fromUInt(0))!=0 && ABDKMathQuad.cmp(conversionQ[txId].ViaXvalue, ABDKMathQuad.fromUInt(0))!=0){
+                (bytes16 redemptionAmount, bytes16 balanceTenure) = getBondValueToRedeem(conversionQ[txId].amount, conversionQ[txId].currency, conversionQ[txId].party,conversionQ[txId].EthXvalue, result);
                 finallyRedeem(conversionQ[txId].amount, conversionQ[txId].currency, conversionQ[txId].party, redemptionAmount, balanceTenure);
             }
         }
     }
 
-    function finallyIssue(uint256 viaBondPrice, uint256 faceValue, bytes32 txId) private {
+    function finallyIssue(bytes16 viaBondPrice, bytes16 faceValue, bytes32 txId) private {
         //add via bonds to this contract's balance first
-        balances[address(this)].add(viaBondPrice);
+        ABDKMathQuad.add(balances[address(this)], viaBondPrice);
         //transfer amount from issuer/sender to borrower
-        transfer(conversionQ[txId].party, viaBondPrice);
+        transfer(conversionQ[txId].party, ABDKMathQuad.toUInt(viaBondPrice));
         //adjust total supply
-        totalSupply_ += viaBondPrice;
+        totalSupply_ = ABDKMathQuad.add(totalSupply_, viaBondPrice);
         //keep track of issues
-        storeIssuedBond(conversionQ[txId].party, name, faceValue, viaBondPrice, conversionQ[txId].amount, conversionQ[txId].currency, now, 1);
+        storeIssuedBond(conversionQ[txId].party, name, faceValue, viaBondPrice, conversionQ[txId].amount, conversionQ[txId].currency, now, ABDKMathQuad.fromUInt(1));
         //generate event
-        emit ViaBondIssued(name, conversionQ[txId].amount, viaBondPrice, 1);
+        emit ViaBondIssued(name, ABDKMathQuad.toUInt(conversionQ[txId].amount), ABDKMathQuad.toUInt(viaBondPrice), 1);
     }
 
-    function finallyRedeem(uint256 amount, bytes32 currency, address borrower, uint256 redemptionAmount, uint balanceTenure) private{
+    function finallyRedeem(bytes16 amount, bytes32 currency, address borrower, bytes16 redemptionAmount, bytes16 balanceTenure) private{
         for(uint256 p=0; p<cashbalances[address(this)].length; p++){
             //check if currency in which redemption is to be done is available in cash balances
             if(cashbalances[address(this)][p].name == currency){
                 //check if currency in which redemption is to be done has sufficient balance
-                if(cashbalances[address(this)][p].balance > redemptionAmount){
+                if(ABDKMathQuad.cmp(cashbalances[address(this)][p].balance, redemptionAmount)==1){
                     //deduct amount to be transferred from cash balance
-                    cashbalances[address(this)][p].balance -= redemptionAmount;
+                    cashbalances[address(this)][p].balance = ABDKMathQuad.sub(cashbalances[address(this)][p].balance, redemptionAmount);
                     //transfer amount from issuer/sender to borrower 
-                    transfer(borrower, redemptionAmount);
+                    transfer(borrower, ABDKMathQuad.toUInt(redemptionAmount));
                     //adjust total supply
-                    totalSupply_ =- amount;
+                    totalSupply_ = ABDKMathQuad.sub(totalSupply_, amount);
                     //generate event
-                    emit ViaBondRedeemed(currency, amount, redemptionAmount, balanceTenure);
+                    emit ViaBondRedeemed(currency, ABDKMathQuad.toUInt(amount), ABDKMathQuad.toUInt(redemptionAmount), ABDKMathQuad.toUInt(balanceTenure));
                 }
             }
         }
     }
 
     //get Via exchange rates from oracle and convert given currency and amount to via cash token
-    function convertToVia(uint256 amount, bytes32 currency, uint256 ethusd, uint256 viarate) private returns(uint256){
+    function convertToVia(bytes16 amount, bytes32 currency, bytes16 ethusd, bytes16 viarate) private returns(bytes16){
         if(currency=="ether"){
             //to first convert amount of ether passed to this function to USD
-            uint256 amountInUSD = (amount/10^18)*ethusd;
+            bytes16 amountInUSD = ABDKMathQuad.mul(ABDKMathQuad.div(amount, ABDKMathQuad.fromUInt(10^18)), ethusd);
             //to then convert USD to Via-currency if currency of this contract is not USD itself
             if(name!="Via-USD"){
-                uint256 inVia = amountInUSD * viarate;
+                bytes16 inVia = ABDKMathQuad.mul(amountInUSD, viarate);
                 return inVia;
             }
             else{
@@ -286,72 +288,71 @@ contract Bond is ERC20, Initializable, Ownable {
         }
         //if currency paid in another via currency
         else{
-            uint256 inVia = viarate;
+            bytes16 inVia = viarate;
             return inVia;
         }
     }
 
     //convert Via-currency (eg, Via-EUR, Via-INR, Via-USD) to Ether or another Via currency
-    function convertFromVia(uint256 amount, bytes32 currency, uint256 ethusd, uint256 viarate) private returns(uint256){
+    function convertFromVia(bytes16 amount, bytes32 currency, bytes16 ethusd, bytes16 viarate) private returns(bytes16){
         //if currency to convert from is ether
         if(currency=="ether"){
-            uint256 amountInViaUSD = amount * viarate;
-            uint256 inEth = amountInViaUSD * (1/ethusd);
+            bytes16 amountInViaUSD = ABDKMathQuad.mul(amount, viarate);
+            bytes16 inEth = ABDKMathQuad.mul(amountInViaUSD, ABDKMathQuad.div(ABDKMathQuad.fromUInt(1),ethusd));
             return inEth;
         }
         //else convert to another via currency
         else{
-            return(viarate*amount);
+            return ABDKMathQuad.mul(viarate, amount);
         }
     }
 
     //uses Oraclize to calculate price of 1 year zero coupon bond in currency and for amount to issue to borrower
     //to do : we need to support bonds with tenure different than the default 1 year. 
-    function getBondValueToIssue(uint256 amount, bytes32 currency, uint tenure, uint256 ethusd, uint256 viarate) private returns(uint256){
+    function getBondValueToIssue(bytes16 amount, bytes32 currency, bytes16 tenure, bytes16 ethusd, bytes16 viarate) private returns(bytes16){
         //to first convert amount of ether passed to this function to USD
-        uint256 amountInUSD = (amount/1000000000000000000)*ethusd;
+        bytes16 amountInUSD = ABDKMathQuad.mul(ABDKMathQuad.div(amount, ABDKMathQuad.fromUInt(1000000000000000000)), ethusd);
         //to then get Via interest rates from oracle and calculate zero coupon bond price
         if(currency!="Via-USD"){
-            return amountInUSD / (1 + viarate) ^ tenure;
+            return ABDKMathQuad.div(amountInUSD, ABDKMathQuad.add(ABDKMathQuad.fromUInt(1), viarate))^tenure;
         }
         else{
-            return amountInUSD / (1 + viarate) ^ tenure;
+            return ABDKMathQuad.div(amountInUSD, ABDKMathQuad.add(ABDKMathQuad.fromUInt(1), viarate))^tenure;
         }
     }
 
     //calculate price of redeeming zero coupon bond in currency and for amount to borrower who may redeem before end of year
-    function getBondValueToRedeem(uint256 _amount, bytes32 _currency, address _borrower, uint256 ethusd, uint256 viarate) private returns(uint256, uint){
+    function getBondValueToRedeem(bytes16 _amount, bytes32 _currency, address _borrower, bytes16 ethusd, bytes16 viarate) private returns(bytes16, bytes16){
         //find out if bond is present in list of issued bonds
-        uint256 toRedeem;
+        bytes16 toRedeem;
         for(uint p=0; p < loans[msg.sender].length; p++){
             //if bond is found to be issued
             if(loans[msg.sender][p].borrower == _borrower &&
                 loans[msg.sender][p].currency == _currency &&
-                loans[msg.sender][p].price >= _amount){
+                (ABDKMathQuad.cmp(loans[msg.sender][p].price, _amount)==1 || ABDKMathQuad.cmp(loans[msg.sender][p].price, _amount)==0)){
                     uint256 timeOfIssue = loans[msg.sender][p].timeOfIssue;
                     //if entire amount is to be redeemed, remove issued bond from store
-                    if(loans[msg.sender][p].price - _amount ==0){
+                    if(ABDKMathQuad.cmp(ABDKMathQuad.sub(loans[msg.sender][p].price, _amount), ABDKMathQuad.fromUInt(0))==0){
                         toRedeem = _amount;
                         delete(loans[msg.sender][p]);
                     }else{
                         //else, reduce outstanding value of bond
-                        loans[msg.sender][p].price = loans[msg.sender][p].price - _amount;
+                        loans[msg.sender][p].price = ABDKMathQuad.sub(loans[msg.sender][p].price, _amount);
                     }
-                    return(convertFromVia(toRedeem, _currency, ethusd, viarate), timeOfIssue);
-                    //return(convertFromVia(toRedeem, _currency, ethusd, viarate), DayCountConventions.diffTime(now,timeOfIssue));
+                    return(convertFromVia(toRedeem, _currency, ethusd, viarate), ABDKMathQuad.div(ABDKMathQuad.sub(ABDKMathQuad.fromUInt(now),ABDKMathQuad.fromUInt(timeOfIssue)),ABDKMathQuad.fromUInt(60*60*24*365)));
             }
         }
-        return(0,0);
+        return(ABDKMathQuad.fromUInt(0),ABDKMathQuad.fromUInt(0));
     }
 
     function storeIssuedBond(address _borrower,
                             bytes32 _currency,
-                            uint256 _facevalue,
-                            uint256 _viabond,
-                            uint256 _amount,
+                            bytes16 _facevalue,
+                            bytes16 _viabond,
+                            bytes16 _amount,
                             bytes32 _collateralCurrency,
-                            uint _timeofissue,
-                            uint _tenure) private {
+                            uint256 _timeofissue,
+                            bytes16 _tenure) private {
         loans[address(this)].push(loan(_borrower,_currency,_facevalue,_viabond,_amount,_collateralCurrency,_timeofissue,_tenure));
     }
 

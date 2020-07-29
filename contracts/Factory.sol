@@ -49,16 +49,12 @@ contract Factory is ProxyFactory {
         emit TokenCreated(_via, tokenName, tokenType);
 
         if(tokenType == "Cash"){
-            //if(token[_via]==address(0)){
                 token[_via] = via("ViaCash", tokenName);
                 tokens.push(_via);
-            //}
         }
         else if(tokenType == "Bond"){
-            //if(token[_via]==address(0)){
                 token[_via] = via("ViaBond", tokenName);
                 tokens.push(_via);
-            //}
         }
     }
     

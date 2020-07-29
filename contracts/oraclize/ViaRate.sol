@@ -7,6 +7,7 @@ import "./provableAPI.sol";
 import "../utilities/StringUtils.sol";
 import "../Cash.sol";
 import "../Bond.sol";
+import "abdk-libraries-solidity/ABDKMathQuad.sol";
 
 contract ViaRate is usingProvable {
 
@@ -41,11 +42,11 @@ contract ViaRate is usingProvable {
         emit LogResult(_result);
         if(pendingQueries[_myid].tokenType == "Cash"){
             Cash cash = Cash(pendingQueries[_myid].caller);
-            cash.convert(_myid, _result.stringToUint(), pendingQueries[_myid].rateType);
+            cash.convert(_myid, ABDKMathQuad.fromUInt(_result.stringToUint()), pendingQueries[_myid].rateType);
         }
         else {
             Bond bond = Bond(pendingQueries[_myid].caller);
-            bond.convert(_myid, _result.stringToUint(), pendingQueries[_myid].rateType);
+            bond.convert(_myid, ABDKMathQuad.fromUInt(_result.stringToUint()), pendingQueries[_myid].rateType);
         }
         delete pendingQueries[_myid]; 
     }
@@ -61,7 +62,7 @@ contract ViaRate is usingProvable {
         } else {
             emit LogNewProvableQuery("Provable query was sent for Via rates, standing by for the answer...");
             if(_ratetype == "er"){
-                bytes32 queryId = provable_query("URL", "oracleurlhere");
+                bytes32 queryId = provable_query("URL", "oracleurlhere"); 
                 pendingQueries[queryId] = params(_tokenContract, _tokenType, _ratetype);
                 return queryId;
             }
