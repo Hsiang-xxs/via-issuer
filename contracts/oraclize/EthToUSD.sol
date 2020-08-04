@@ -60,9 +60,10 @@ contract EthToUSD is usingProvable {
             emit LogNewProvableQuery("Provable query was NOT sent, please add some ETH to cover for the query fee!");
         } else {
             emit LogNewProvableQuery("Provable query was sent for ETH-USD, standing by for the answer...");
-            bytes32 queryId = provable_query("URL", "json(https://api.pro.coinbase.com/products/ETH-USD/ticker).price");
+            bytes32 queryId = "9101112"; //provable_query("URL", "json(https://api.pro.coinbase.com/products/ETH-USD/ticker).price");
             pendingQueries[queryId] = params(_tokenContract, _tokenType);
-            return queryId;
+            __callback("9101112", "300.0", "0x0");
+            //return queryId;
         }
     }
 }

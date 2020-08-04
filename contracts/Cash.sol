@@ -148,16 +148,23 @@ contract Cash is ERC20, Initializable, Ownable {
         }
         //find amount of via cash tokens to transfer after applying exchange rate
         if(currency=="ether"){
-            EthXid = new EthToUSD().update("Cash", address(this));
+            EthXid = "9101112"; //only for testing
+            new EthToUSD().update("Cash", address(this));
             if(name!="Via-USD"){
-                ViaXid = new ViaRate().requestPost(abi.encodePacked("Via_USD_to_", name),"ver","Cash", address(this));
+                ViaXid = "3456"; //only for testing
+                conversionQ[ViaXid] = conversion("issue", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0));
+                conversions.push(ViaXid);
+                new ViaRate().requestPost(abi.encodePacked("Via_USD_to_", name),"ver","Cash", address(this));
             }
         }
         else{
-            ViaXid = new ViaRate().requestPost(abi.encodePacked(currency, "_to_", name),"er","Cash", address(this));
+            ViaXid = "1234"; //only for testing
+            conversionQ[ViaXid] = conversion("issue", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0));
+            conversions.push(ViaXid);
+            new ViaRate().requestPost(abi.encodePacked(currency, "_to_", name),"er","Cash", address(this));
         }
-        conversionQ[ViaXid] = conversion("issue", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0));
-        conversions.push(ViaXid);
+        //conversionQ[ViaXid] = conversion("issue", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0));
+        //conversions.push(ViaXid);
     }
 
     //requesting redemption of Via cash token and transfer of currency it was issued against
@@ -176,14 +183,21 @@ contract Cash is ERC20, Initializable, Ownable {
         if(found){
             //call Via oracle
             if(currency=="ether"){
-                EthXid = new EthToUSD().update("Cash", address(this));
-                ViaXid = new ViaRate().requestPost(abi.encodePacked(name, "_to_Via_USD"),"ver","Cash", address(this));
+                EthXid = "9101112"; //only for testing
+                new EthToUSD().update("Cash", address(this));
+                ViaXid = "3456"; //only for testing
+                conversionQ[ViaXid] = conversion("redeem", seller, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0));
+                conversions.push(ViaXid);
+                new ViaRate().requestPost(abi.encodePacked(name, "_to_Via_USD"),"ver","Cash", address(this));
             }
             else{
-                ViaXid = new ViaRate().requestPost(abi.encodePacked(name, "_to_", currency),"er","Cash", address(this));
+                ViaXid = "1234"; //only for testing
+                conversionQ[ViaXid] = conversion("redeem", seller, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0));
+                conversions.push(ViaXid);
+                new ViaRate().requestPost(abi.encodePacked(name, "_to_", currency),"er","Cash", address(this));
             }
-            conversionQ[ViaXid] = conversion("redeem", seller, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0));
-            conversions.push(ViaXid);
+            //conversionQ[ViaXid] = conversion("redeem", seller, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0));
+            //conversions.push(ViaXid);
         }
         return found;
     }

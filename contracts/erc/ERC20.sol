@@ -35,8 +35,9 @@ contract ERC20{
     }
 
     function transfer(address receiver, uint tokens) public returns (bool){
-        require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),balances[msg.sender])==-1);
-        require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),balances[msg.sender])==0);
+        require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),balances[msg.sender])==-1 || 
+                ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),balances[msg.sender])==0);
+        //require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),balances[msg.sender])==0);
         balances[msg.sender] = ABDKMathQuad.sub(balances[msg.sender], ABDKMathQuad.fromUInt(tokens));
         balances[receiver] = ABDKMathQuad.add(balances[receiver], ABDKMathQuad.fromUInt(tokens));
         emit Transfer(msg.sender, receiver, tokens);
@@ -54,8 +55,9 @@ contract ERC20{
     }
 
     function transferFrom(address owner, address buyer, uint tokens) public returns (bool){
-        require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), balances[owner])==-1);
-        require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), balances[owner])==0);
+        require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), balances[owner])==-1 ||
+                ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), balances[owner])==0);
+        //require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), balances[owner])==0);
         require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), allowed[owner][msg.sender])==-1 || ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), allowed[owner][msg.sender])==0);
         balances[owner] = ABDKMathQuad.sub(balances[owner], ABDKMathQuad.fromUInt(tokens));
         allowed[owner][msg.sender] = ABDKMathQuad.sub(allowed[owner][msg.sender], ABDKMathQuad.fromUInt(tokens));
