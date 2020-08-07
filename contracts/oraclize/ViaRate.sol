@@ -61,16 +61,10 @@ contract ViaRate is usingProvable {
             emit LogNewProvableQuery("Provable query was NOT sent, please add some ETH to cover for the query fee!");
         } else {
             emit LogNewProvableQuery("Provable query was sent for Via rates, standing by for the answer...");
-            if(_ratetype == "er"){
+            if(_ratetype == "er" || _ratetype == "ver"){
                 bytes32 queryId = "1234"; //provable_query("URL", "oracleurlhere"); 
                 pendingQueries[queryId] = params(_tokenContract, _tokenType, _ratetype);
                 __callback("1234", "10.0", "0x0");
-                //return queryId;
-            }
-            else if(_ratetype == "ver"){
-                bytes32 queryId = "3456"; //provable_query("URL", "oracleurlhere"); 
-                pendingQueries[queryId] = params(_tokenContract, _tokenType, _ratetype);
-                __callback("3456", "10.0", "0x0");
                 //return queryId;
             }
             else if(_ratetype == "ir"){
