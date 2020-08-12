@@ -34,7 +34,7 @@ contract Cash is ERC20, Initializable, Ownable {
     //mapping of buyers (address) to deposits they make against which via cash tokens are issued
     mapping(address => deposit[]) public depositors;
 
-    //for Oraclize
+    //callback identifiers (request_ids) for Oraclize
     bytes32 EthXid;
     bytes32 ViaXid;
     
@@ -43,10 +43,10 @@ contract Cash is ERC20, Initializable, Ownable {
         bytes32 operation;
         address party;
         bytes16 amount;
-        bytes32 currency;
+        bytes32 paid_in_currency;
         bytes32 EthXid;
         bytes16 EthXvalue;
-        bytes32 name;
+        bytes32 payout_currency;
         bytes16 ViaXvalue;
     }
 
@@ -73,16 +73,16 @@ contract Cash is ERC20, Initializable, Ownable {
         //ether paid in
         require(msg.value !=0);
         //issue via cash tokens
-        issue(ABDKMathQuad.fromUInt(msg.value), msg.sender, "ether", address(0x0));
+        issue(ABDKMathQuad.fromUInt(msg.value), msg.sender, "ether", address(this));
     }
 
-    //overriding this function of ERC20 standard
+    //overriding this function of ERC20 standard for transfer of via cash tokens to other users or to this contract for redemption
     function transferFrom(address sender, address receiver, uint256 tokens) public returns (bool){
         //check if tokens are being transferred to this cash contract
         if(receiver == address(this)){
             //if token name is the same, this transfer has to be redeemed
             if(Cash(address(msg.sender)).name()==name){
-                if(redeem(ABDKMathQuad.fromUInt(tokens), receiver, name))
+                if(redeem(ABDKMathQuad.fromUInt(tokens), sender, name))
                     return true;
                 else
                     return false;
@@ -94,7 +94,7 @@ contract Cash is ERC20, Initializable, Ownable {
                     address viaAddress = factory.tokens(p);
                     if(factory.getName(viaAddress) == Cash(address(msg.sender)).name() &&
                             factory.getType(viaAddress) != "ViaBond"){
-                        if(issue(ABDKMathQuad.fromUInt(tokens), receiver, Cash(address(msg.sender)).name(), viaAddress))
+                        if(issue(ABDKMathQuad.fromUInt(tokens), sender, Cash(address(msg.sender)).name(), viaAddress))
                             return true;
                         else
                             return false;
@@ -139,16 +139,16 @@ contract Cash is ERC20, Initializable, Ownable {
             return false;
     }
     
-    //requesting issue of Via to buyer for amount of ether or some other via cash token
-    function issue(bytes16 amount, address buyer, bytes32 currency, address cashToken) private returns(bool){
+    //requesting issue of Via to buyer for amount of ether or some other via cash token paid in and stored in cashContract
+    function issue(bytes16 amount, address buyer, bytes32 currency, address cashContract) private returns(bool){
         //ensure that brought amount is not zero
         require(amount != 0);
         //adds paid in amount to the currency issuer's cash balance
         if(currency!="ether")
-            if(!Cash(address(uint160(cashToken))).addToBalance(amount, buyer))
+            if(!Cash(address(uint160(cashContract))).addToBalance(amount, buyer))
                 return false;
         else
-            ethbalances[address(this)] = ABDKMathQuad.add(ethbalances[address(this)], amount);
+            ethbalances[cashContract] = ABDKMathQuad.add(ethbalances[cashContract], amount);
         //add paid in currency to depositor
         bool found = false;
         uint256 p=0;
@@ -165,15 +165,27 @@ contract Cash is ERC20, Initializable, Ownable {
             depositors[buyer][p].amount = ABDKMathQuad.add(depositors[buyer][p].amount, amount);
         //find amount of via cash tokens to transfer after applying exchange rate
         if(currency=="ether"){
-            EthXid = "9101112"; //only for testing
-            new EthToUSD().update("Cash", address(this));
+            //if ether is paid in for issue of non-USD cash token, we need the exchange rate of ether to the USD (ethusd)
+            //and the exchange rate of Via-USD to the requested non-USD cash token (eg, Via-EUR)
             if(name!="Via-USD"){
                 ViaXid = "1234"; //only for testing
+                EthXid = "9101112"; //only for testing
                 conversionQ[ViaXid] = conversion("issue", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0));
                 conversions.push(ViaXid);
+                new EthToUSD().update("Cash", address(this));
                 new ViaRate().requestPost(abi.encodePacked("Via_USD_to_", name),"ver","Cash", address(this));
             }
+            //if ether is paid in for issue of Via-USD cash token, then all we need is the exchange rate of ether to USD (ethusd)
+            //since the exchange rate of USD to Via-USD is always 1
+            else{
+                EthXid = "9101112"; //only for testing
+                conversionQ[EthXid] = conversion("issue", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(1));
+                conversions.push(EthXid);
+                new EthToUSD().update("Cash", address(this));
+            }
         }
+        //if ether is not paid in and instead, some other Via cash token is paid in
+        //we need to find the exchange rate between the paid in Via cash token and the cash token this cash contract represents
         else{
             ViaXid = "1234"; //only for testing
             conversionQ[ViaXid] = conversion("issue", buyer, amount, currency, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0));
@@ -186,29 +198,42 @@ contract Cash is ERC20, Initializable, Ownable {
     }
 
     //requesting redemption of Via cash token and transfer of currency it was issued against
-    function redeem(bytes16 amount, address seller, bytes32 tokenname) private returns(bool){
-        //ensure that sold amount is not zero
+    function redeem(bytes16 amount, address seller, bytes32 token) private returns(bool){
+        //if amount is not zero, there is some left to redeem
         if(amount != 0){
             //find currency that seller had deposited earlier
-            bytes32 currency = depositors[seller][0].currency;
+            bytes32 currency_in_deposit = depositors[seller][0].currency;
             //if no more currencies to redeem and amount to redeem is not zero, then redemption fails
-            if(currency==""){
+            if(currency_in_deposit==""){
                 return false;
             }
-            //call Via oracle
-            else if(currency=="ether"){
-                EthXid = "9101112"; //only for testing
-                new EthToUSD().update("Cash", address(this));
-                ViaXid = "1234"; //only for testing
-                conversionQ[ViaXid] = conversion("redeem", seller, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), tokenname, ABDKMathQuad.fromUInt(0));
-                conversions.push(ViaXid);
-                new ViaRate().requestPost(abi.encodePacked(tokenname, "_to_Via_USD"),"ver","Cash", address(this));
+            //if currency that this cash token can be redeemed in is ether
+            else if(currency_in_deposit=="ether"){
+                //and if cash token to redeem is not Via USD, we need to get the exchange rate of ether to the Via-USD, 
+                //and then the exchange rate of this Via cash token to redeeem and the Via-USD
+                if(token!="Via_USD"){
+                    EthXid = "9101112"; //only for testing
+                    ViaXid = "1234"; //only for testing
+                    conversionQ[ViaXid] = conversion("redeem", seller, amount, token, EthXid, ABDKMathQuad.fromUInt(0), currency_in_deposit, ABDKMathQuad.fromUInt(0));
+                    conversions.push(ViaXid);
+                    new EthToUSD().update("Cash", address(this));
+                    new ViaRate().requestPost(abi.encodePacked(token, "_to_Via_USD"),"ver","Cash", address(this));
+                }
+                //otherwise if the cash token to redeem is a Via USD, all we need is the exchange rate of ether to the USD
+                else{
+                    EthXid = "9101112"; //only for testing
+                    conversionQ[EthXid] = conversion("redeem", seller, amount, token, EthXid, ABDKMathQuad.fromUInt(0), currency_in_deposit, ABDKMathQuad.fromUInt(1));
+                    conversions.push(EthXid);
+                    new EthToUSD().update("Cash", address(this));
+                }
             }
+            //else if the currency this cash token can be redeemed is another Via cash token,
+            //we just need the exchange rate of this Via cash token to redeem and the currency that is in deposit
             else{
                 ViaXid = "1234"; //only for testing
-                conversionQ[ViaXid] = conversion("redeem", seller, amount, currency, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0), tokenname, ABDKMathQuad.fromUInt(0));
+                conversionQ[ViaXid] = conversion("redeem", seller, amount, token, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0), currency_in_deposit, ABDKMathQuad.fromUInt(0));
                 conversions.push(ViaXid);
-                new ViaRate().requestPost(abi.encodePacked(tokenname, "_to_", currency),"er","Cash", address(this));
+                new ViaRate().requestPost(abi.encodePacked(token, "_to_", currency_in_deposit),"er","Cash", address(this));
             }
             //conversionQ[ViaXid] = conversion("redeem", seller, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0));
             //conversions.push(ViaXid);
@@ -233,40 +258,47 @@ contract Cash is ERC20, Initializable, Ownable {
         //check if cash needs to be issued or redeemed
         if(conversionQ[txId].operation=="issue"){
             if(rtype == "ethusd" || rtype == "ver"){
-                //for issuing to happen, both value of ethX (ie ether exchange) and viaX (ie via exchange) are to be non zero
+                //for issuing to happen when ether is paid in,
+                //value of ethX (ie ether exchange rate to USD) has to be non-zero 
+                //and viaX (ie via exchange) should be non-zero if cash token to be issued is not Via-USD. We store 1 for ViaXvalue if Via-USD has to be issued
                 if(ABDKMathQuad.cmp(conversionQ[txId].EthXvalue, ABDKMathQuad.fromUInt(0))!=0 && ABDKMathQuad.cmp(conversionQ[txId].ViaXvalue, ABDKMathQuad.fromUInt(0))!=0){
-                    bytes16 via = convertToVia(conversionQ[txId].amount, conversionQ[txId].currency,conversionQ[txId].EthXvalue,conversionQ[txId].ViaXvalue);
+                    bytes16 via = convertToVia(conversionQ[txId].amount, conversionQ[txId].paid_in_currency,conversionQ[txId].EthXvalue,conversionQ[txId].ViaXvalue);
                     finallyIssue(via, conversionQ[txId].party);
                 }
             }
             else if(rtype == "er"){
-                //for issuing to happen, value of viaX is to be non zero
+                //for issuing to happen if some other Via cash token is paid in, 
+                //only the value of ViaX (ie exchange rate of paid in Via cash token to Via cash token to issue) has to be non-zero
                 if(ABDKMathQuad.cmp(conversionQ[txId].ViaXvalue, ABDKMathQuad.fromUInt(0))!=0){
-                    bytes16 via = convertToVia(conversionQ[txId].amount, conversionQ[txId].currency,conversionQ[txId].EthXvalue,conversionQ[txId].ViaXvalue);
+                    bytes16 via = convertToVia(conversionQ[txId].amount, conversionQ[txId].paid_in_currency,conversionQ[txId].EthXvalue,conversionQ[txId].ViaXvalue);
                     finallyIssue(via, conversionQ[txId].party);
                 }
             }
         }
         else if(conversionQ[txId].operation=="redeem"){
             if(rtype == "ethusd" || rtype == "ver"){
-                //for redemption to happen, both value of ethX (ie ether exchange) and viaX (ie via exchange) are to be non zero
+                //for redemption to happen in ether,
+                //value of ethX (ie ether exchange rate to USD) has to be non-zero 
+                //and viaX (ie via exchange) should be non-zero if cash token to be redeemed is not Via-USD. We store 1 for ViaXvalue if Via-USD has to be redeemed
                 if(ABDKMathQuad.cmp(conversionQ[txId].EthXvalue, ABDKMathQuad.fromUInt(0))!=0 && ABDKMathQuad.cmp(conversionQ[txId].ViaXvalue, ABDKMathQuad.fromUInt(0))!=0){
-                    bytes16 value = convertFromVia(conversionQ[txId].amount, conversionQ[txId].currency,conversionQ[txId].EthXvalue,conversionQ[txId].ViaXvalue);
-                    finallyRedeem(value, conversionQ[txId].currency, conversionQ[txId].party, conversionQ[txId].amount);
+                    bytes16 value = convertFromVia(conversionQ[txId].amount, conversionQ[txId].payout_currency,conversionQ[txId].EthXvalue,conversionQ[txId].ViaXvalue);
+                    finallyRedeem(value, conversionQ[txId].payout_currency, conversionQ[txId].party, conversionQ[txId].amount);
                 }
             }
             else if(rtype == "er"){
-                //for redemption to happen, value of viaX is to be non zero
+                //for redemption to happen in some other Via cash token
+                //the viaX (ie via exchange rate) between the cash token to redeem and the cash token in deposit should be non-zero
                 if(ABDKMathQuad.cmp(conversionQ[txId].ViaXvalue, ABDKMathQuad.fromUInt(0))!=0){
-                    bytes16 value = convertFromVia(conversionQ[txId].amount, conversionQ[txId].currency,conversionQ[txId].EthXvalue,conversionQ[txId].ViaXvalue);
-                    finallyRedeem(value, conversionQ[txId].currency, conversionQ[txId].party, conversionQ[txId].amount);
+                    bytes16 value = convertFromVia(conversionQ[txId].amount, conversionQ[txId].payout_currency,conversionQ[txId].EthXvalue,conversionQ[txId].ViaXvalue);
+                    finallyRedeem(value, conversionQ[txId].payout_currency, conversionQ[txId].party, conversionQ[txId].amount);
                 }
             }
         }
     }
 
+    //via is the number of this via cash token that is being issued, party is the user account address to which issued tokens are credited
     function finallyIssue(bytes16 via, address party) private {
-        //add via to this contract's balance first (aka issue them first)
+        //add via to this contract's balance first (ie issue them first)
         ABDKMathQuad.add(balances[address(this)], via);
         //transfer amount to buyer 
         transfer(party, ABDKMathQuad.toUInt(via));
@@ -276,6 +308,10 @@ contract Cash is ERC20, Initializable, Ownable {
         emit ViaCashIssued(name, via);
     }
 
+    //value is the redeemable value in the currency to pay out
+    //currency is the pay out currency or currency to pay out
+    //party is the user account address to which redemption has to be credited
+    //amount is the number of this via cash token that needs to be redeemed
     function finallyRedeem(bytes16 value, bytes32 currency, address party, bytes16 amount) private {
         //check if the issuer's balance of the currency deposited by party is more than or equal to amount redeemed
         for(uint256 p=0; p<depositors[party].length; p++){
@@ -288,6 +324,8 @@ contract Cash is ERC20, Initializable, Ownable {
                         depositors[party][p].amount = ABDKMathQuad.sub(depositors[party][p].amount, value);
                         if(depositors[party][p].amount==0)
                             delete depositors[party][p];
+                        //send redeemed ether to party
+                        address(uint160(party)).transfer(ABDKMathQuad.toUInt(value));
                         //adjust total supply
                         totalSupply_ = ABDKMathQuad.sub(totalSupply_, amount);
                         //generate event
@@ -296,8 +334,8 @@ contract Cash is ERC20, Initializable, Ownable {
                     else{
                         for(uint256 q=0; q<factory.getTokenCount(); q++){
                             address viaAddress = factory.tokens(q);
-                            if(factory.getName(viaAddress) == currency){
-                                if(!Cash(address(uint160(viaAddress))).deductFromBalance(value, party)){
+                            if(factory.getName(viaAddress) == currency && factory.getType(viaAddress) == "ViaCash"){
+                                if(Cash(address(uint160(viaAddress))).deductFromBalance(value, party)){
                                     depositors[party][q].amount = ABDKMathQuad.sub(depositors[party][q].amount, value);
                                     if(depositors[party][q].amount==0)
                                         delete depositors[party][q];
@@ -310,31 +348,35 @@ contract Cash is ERC20, Initializable, Ownable {
                         }
                     }
                 }
+                //amount to redeem is more than what is in deposit, so we need to remove deposit after redemption,
+                //and call the redeem function again for the balance amount that is not yet redeemed
                 else{
                     if(currency=="ether"){
-                        ethbalances[address(this)] = ABDKMathQuad.sub(ethbalances[address(this)], value);
-                        bytes16 toRedeem = ABDKMathQuad.sub(value, depositors[party][p].amount);
-                        bytes16 proportion = ABDKMathQuad.div(depositors[party][p].amount, value);
+                        ethbalances[address(this)] = ABDKMathQuad.sub(ethbalances[address(this)], depositors[party][p].amount);
+                        bytes16 balanceToRedeem = ABDKMathQuad.sub(value, depositors[party][p].amount);
+                        bytes16 proportionRedeemed = ABDKMathQuad.div(depositors[party][p].amount, value);
                         delete depositors[party][p];
+                        //send redeemed ether to party
+                        address(uint160(party)).transfer(ABDKMathQuad.toUInt(depositors[party][p].amount));
                         //adjust total supply
-                        totalSupply_ = ABDKMathQuad.sub(totalSupply_, ABDKMathQuad.mul(amount, proportion));
+                        totalSupply_ = ABDKMathQuad.sub(totalSupply_, ABDKMathQuad.mul(amount, proportionRedeemed));
                         //generate event
-                        emit ViaCashRedeemed(currency, value);
-                        redeem(toRedeem, party, currency);
+                        emit ViaCashRedeemed(currency, depositors[party][p].amount);
+                        redeem(balanceToRedeem, party, name);
                     }
                     else{
                         for(uint256 q=0; q<factory.getTokenCount(); q++){
                             address viaAddress = factory.tokens(q);
-                            if(factory.getName(viaAddress) == currency){
-                                if(!Cash(address(uint160(viaAddress))).deductFromBalance(value, party)){
-                                    bytes16 toRedeem = ABDKMathQuad.sub(value, depositors[party][q].amount);
-                                    bytes16 proportion = ABDKMathQuad.div(depositors[party][q].amount, value);
+                            if(factory.getName(viaAddress) == currency && factory.getType(viaAddress) == "ViaCash"){
+                                if(Cash(address(uint160(viaAddress))).deductFromBalance(depositors[party][q].amount, party)){
+                                    bytes16 balanceToRedeem = ABDKMathQuad.sub(value, depositors[party][q].amount);
+                                    bytes16 proportionRedeemed = ABDKMathQuad.div(depositors[party][q].amount, value);
                                     delete depositors[party][q];
                                     //adjust total supply
-                                    totalSupply_ = ABDKMathQuad.sub(totalSupply_, ABDKMathQuad.mul(amount, proportion));
+                                    totalSupply_ = ABDKMathQuad.sub(totalSupply_, ABDKMathQuad.mul(amount, proportionRedeemed));
                                     //generate event
-                                    emit ViaCashRedeemed(currency, value);
-                                    redeem(toRedeem, party, currency);
+                                    emit ViaCashRedeemed(currency, depositors[party][q].amount);
+                                    redeem(balanceToRedeem, party, name);
                                 }
                             }
                         }
@@ -345,8 +387,8 @@ contract Cash is ERC20, Initializable, Ownable {
     }
     
     //get Via exchange rates from oracle and convert given currency and amount to via cash token
-    function convertToVia(bytes16 amount, bytes32 currency, bytes16 ethusd, bytes16 viarate) private returns(bytes16){
-        if(currency=="ether"){
+    function convertToVia(bytes16 amount, bytes32 paid_in_currency, bytes16 ethusd, bytes16 viarate) private returns(bytes16){
+        if(paid_in_currency=="ether"){
             //to first convert amount of ether passed to this function to USD
             bytes16 amountInUSD = ABDKMathQuad.mul(ABDKMathQuad.div(amount,ABDKMathQuad.fromUInt(10^18)),ethusd);
             //to then convert USD to Via-currency if currency of this contract is not USD itself
@@ -366,11 +408,13 @@ contract Cash is ERC20, Initializable, Ownable {
     }
 
     //convert Via-currency (eg, Via-EUR, Via-INR, Via-USD) to Ether or another Via currency
-    function convertFromVia(bytes16 amount, bytes32 currency, bytes16 ethusd, bytes16 viarate) private returns(bytes16){
-        //if currency to convert from is ether
-        if(currency=="ether"){
+    //viarate is 1 if pay out currency is ether and this via cash token to redeem is Via-USD, otherwise viarate is exchange rate between this cash token to Via-USD
+    //if pay out currency is not ether, then viarate is exchange rate between this cash token and cash token to pay out 
+    function convertFromVia(bytes16 amount, bytes32 payout_currency, bytes16 ethusd, bytes16 viarate) private returns(bytes16){
+        //if currency to convert to is ether
+        if(payout_currency=="ether"){
             bytes16 amountInViaUSD = ABDKMathQuad.mul(amount, viarate);
-            bytes16 inEth = ABDKMathQuad.mul(amountInViaUSD, ABDKMathQuad.div(ABDKMathQuad.fromUInt(1), ethusd));
+            bytes16 inEth = ABDKMathQuad.div(amountInViaUSD, ethusd);
             return inEth;
         }
         //else convert to another via currency

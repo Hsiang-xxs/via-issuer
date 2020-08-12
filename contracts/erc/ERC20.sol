@@ -14,12 +14,12 @@ contract ERC20{
     uint8 public constant decimals = 2;
 
     //variables
-    bytes16 totalSupply_; 
+    bytes16 totalSupply_;
 
     //Via balances held by this address
-    mapping(address => bytes16) public balances; 
+    mapping(address => bytes16) public balances;
     //Delegates allowed to access this address
-    mapping(address => mapping (address => bytes16)) allowed; 
+    mapping(address => mapping (address => bytes16)) allowed;
 
     //erc20 standard events
     event Approval(address indexed tokenOwner, address indexed spender, uint tokens);
