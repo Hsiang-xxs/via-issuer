@@ -6,7 +6,6 @@ pragma solidity >=0.5.0 <0.7.0;
 import "./erc/ERC20.sol";
 import "./oraclize/ViaRate.sol";
 import "./oraclize/EthToUSD.sol";
-import "./utilities/StringUtils.sol";
 import "./Factory.sol";
 import "abdk-libraries-solidity/ABDKMathQuad.sol";
 import "@openzeppelin/upgrades/contracts/Initializable.sol";
@@ -14,7 +13,9 @@ import "@openzeppelin/contracts-ethereum-package/contracts/ownership/Ownable.sol
 
 contract Cash is ERC20, Initializable, Ownable {
 
-    using stringutils for *;
+    using ABDKMathQuad for uint256;
+    using ABDKMathQuad for int256;
+    using ABDKMathQuad for bytes16;
 
     //via token factory address
     Factory private factory;
