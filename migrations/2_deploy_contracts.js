@@ -2,6 +2,7 @@
 // deploying via tokens
 
 const stringutils = artifacts.require('stringutils');
+const ABDKMathQuad = artifacts.require('ABDKMathQuad');
 const Factory = artifacts.require('Factory');
 const Bond = artifacts.require('Bond');
 const Cash = artifacts.require('Cash');
@@ -14,8 +15,11 @@ const ERC20 = artifacts.require('ERC20');
 module.exports = function(deployer) {
 
     deployer.deploy(stringutils);
-    deployer.link(stringutils, [Bond, Cash, ViaRate, EthToUSD]);
+    deployer.link(stringutils, [ViaRate, EthToUSD]);
 
+    deployer.deploy(ABDKMathQuad);
+    deployer.link(ABDKMathQuad,[Cash, Bond, ViaRate, EthToUSD, ERC20]);
+    
     deployer.deploy(Cash);
     deployer.deploy(Bond);
     deployer.deploy(ViaRate);

@@ -7,6 +7,10 @@ import "abdk-libraries-solidity/ABDKMathQuad.sol";
 
 contract ERC20{
 
+    using ABDKMathQuad for uint256;
+    using ABDKMathQuad for int256;
+    using ABDKMathQuad for bytes16;
+
     //address of the issuer of the Via, set once, never reset again
     address public issuer;
 

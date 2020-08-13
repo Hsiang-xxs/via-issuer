@@ -13,6 +13,10 @@ import "abdk-libraries-solidity/ABDKMathQuad.sol";
 contract EthToUSD is usingProvable {
 
     using stringutils for *;
+    
+    using ABDKMathQuad for uint256;
+    using ABDKMathQuad for int256;
+    using ABDKMathQuad for bytes16;
 
     struct params{
         address payable caller;

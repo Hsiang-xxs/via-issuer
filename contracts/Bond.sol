@@ -13,6 +13,10 @@ import "./Factory.sol";
 
 contract Bond is ERC20, Initializable, Ownable {
 
+    using ABDKMathQuad for uint256;
+    using ABDKMathQuad for int256;
+    using ABDKMathQuad for bytes16;
+
     //via token factory address
     Factory private factory;
 
