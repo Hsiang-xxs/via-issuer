@@ -1,71 +1,35 @@
-const HelloBlockchain = artifacts.require("HelloBlockchain");
-contract('HelloBlockchain', (accounts) => {
+const Factory = artifacts.require('Factory');
+const Cash = artifacts.require('Cash');
+const stringutils = artifacts.require('stringutils');
+const ABDKMathQuad = artifacts.require('ABDKMathQuad');
+//const cashABI = require('../build/Cash.json').abi;
+//const cashBytecode = require('../build/contracts/Cash.json').bytecode;
 
-    it('testing ResponseMessage of HelloBlockchain', async () => {
-        const HelloBlockchainInstance = await HelloBlockchain.deployed();
-        var returnValue1;
-        returnValue1 = await HelloBlockchainInstance.ResponseMessage.call();
+web3.setProvider("http://127.0.0.1:8545");
 
-        // Write an assertion below to check the return value of ResponseMessage.
-        assert.equal('something', 'something', 'A correctness property about ResponseMessage of HelloBlockchain');
+contract("ViaUSDCash", async (accounts) => {
+    it("should send ether to ViaUSDCash and then get some Via-USD cash tokens", async () => {
+        var abdkMathQuad = await ABDKMathQuad.deployed();
+        await Cash.link(abdkMathQuad);
+
+        var factory = await Factory.deployed();
+        var cash = await Cash.deployed();
+        
+        await factory.createToken(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"));
+        
+        var viausdCashAddress = await factory.tokens(0);
+        var viausdCashName = await web3.utils.hexToUtf8(await factory.getName(viausdCashAddress));
+        var viausdCashType = await web3.utils.hexToUtf8(await factory.getType(viausdCashAddress));
+        var viausdCash = await Cash.at(viausdCashAddress);
+
+        console.log(viausdCashName, viausdCashType, "token address:", viausdCashAddress);
+        console.log(viausdCashName, viausdCashType, "token contract ether balacne before sending ether:", await web3.eth.getBalance(viausdCashAddress));
+        console.log("Account address:", accounts[0]);
+        console.log("Account ether balacne before sending ether:", await web3.eth.getBalance(accounts[0]));
+        
+        await viausdCash.sendTransaction({from:accounts[0], to:viausdCashAddress});
+        
+        console.log("Via-USD cash token contract ether balacne after sending ether:", await web3.eth.getBalance(viausdCashAddress));
+        console.log("Account ether balacne after sending ether:", await web3.eth.getBalance(accounts[0]));
     });
-
-    it('testing Responder of HelloBlockchain', async () => {
-        const HelloBlockchainInstance = await HelloBlockchain.deployed();
-        var returnValue1;
-        returnValue1 = await HelloBlockchainInstance.Responder.call();
-
-        // Write an assertion below to check the return value of Responder.
-        assert.equal('something', 'something', 'A correctness property about Responder of HelloBlockchain');
-    });
-
-    it('testing RequestMessage of HelloBlockchain', async () => {
-        const HelloBlockchainInstance = await HelloBlockchain.deployed();
-        var returnValue1;
-        returnValue1 = await HelloBlockchainInstance.RequestMessage.call();
-
-        // Write an assertion below to check the return value of RequestMessage.
-        assert.equal('something', 'something', 'A correctness property about RequestMessage of HelloBlockchain');
-    });
-
-    it('testing State of HelloBlockchain', async () => {
-        const HelloBlockchainInstance = await HelloBlockchain.deployed();
-        var returnValue1;
-        returnValue1 = await HelloBlockchainInstance.State.call();
-
-        // Write an assertion below to check the return value of State.
-        assert.equal('something', 'something', 'A correctness property about State of HelloBlockchain');
-    });
-
-    it('testing Requestor of HelloBlockchain', async () => {
-        const HelloBlockchainInstance = await HelloBlockchain.deployed();
-        var returnValue1;
-        returnValue1 = await HelloBlockchainInstance.Requestor.call();
-
-        // Write an assertion below to check the return value of Requestor.
-        assert.equal('something', 'something', 'A correctness property about Requestor of HelloBlockchain');
-    });
-
-    it('testing SendRequest of HelloBlockchain', async () => {
-        const HelloBlockchainInstance = await HelloBlockchain.deployed();
-        var callerAccount = accounts[0];
-        var requestMessage1 = "StringValue1";
-        await HelloBlockchainInstance.SendRequest(requestMessage1, {from: callerAccount});
-
-        // Because the function call can change the state of contract HelloBlockchain, please write assertions
-        // below to check the contract state.
-        assert.equal('something', 'something', 'A correctness property about SendRequest of HelloBlockchain');
-    });
-
-    it('testing SendResponse of HelloBlockchain', async () => {
-        const HelloBlockchainInstance = await HelloBlockchain.deployed();
-        var callerAccount = accounts[0];
-        var responseMessage1 = "StringValue1";
-        await HelloBlockchainInstance.SendResponse(responseMessage1, {from: callerAccount});
-
-        // Because the function call can change the state of contract HelloBlockchain, please write assertions
-        // below to check the contract state.
-        assert.equal('something', 'something', 'A correctness property about SendResponse of HelloBlockchain');
-    });
-
 });
