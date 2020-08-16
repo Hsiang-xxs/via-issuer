@@ -15,11 +15,11 @@ const ERC20 = artifacts.require('ERC20');
 module.exports = function(deployer) {
 
     deployer.deploy(stringutils);
-    deployer.link(stringutils, [ViaRate, EthToUSD]);
-
+    deployer.link(stringutils, [Bond, Cash, ViaRate, EthToUSD]);
+    
     deployer.deploy(ABDKMathQuad);
     deployer.link(ABDKMathQuad,[Cash, Bond, ViaRate, EthToUSD, ERC20]);
-    
+
     deployer.deploy(Cash);
     deployer.deploy(Bond);
     deployer.deploy(ViaRate);
@@ -28,10 +28,11 @@ module.exports = function(deployer) {
     deployer.deploy(ERC20);
 
     deployer.deploy(Factory).then(async () => {
-        const factory = await Factory.new();
-        const cash = await Cash.new();
-        const bond = await Bond.new();
-
+        const factory = await Factory.deployed();
+        const cash = await Cash.deployed();
+        const bond = await Bond.deployed();
+        
+        
         await factory.createToken(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"));
         await factory.createToken(cash.address, web3.utils.utf8ToHex("Via-EUR"), web3.utils.utf8ToHex("Cash"));
         await factory.createToken(cash.address, web3.utils.utf8ToHex("Via-INR"), web3.utils.utf8ToHex("Cash"));
@@ -40,6 +41,16 @@ module.exports = function(deployer) {
         await factory.createToken(bond.address, web3.utils.utf8ToHex("Via-EUR"), web3.utils.utf8ToHex("Bond"));
         await factory.createToken(bond.address, web3.utils.utf8ToHex("Via-INR"), web3.utils.utf8ToHex("Bond"));
 
+        for (let i = 0; i < 6; i++) {
+            var factoryTokenAddress = await factory.tokens(i);
+            console.log("Token address:", factoryTokenAddress);
+            console.log("Token name:", web3.utils.hexToUtf8(await factory.getName(factoryTokenAddress)));
+            console.log("Token type:", web3.utils.hexToUtf8(await factory.getType(factoryTokenAddress)));
+            console.log();
+        }
+        
+
+        /*
         for (let i=0; i<6; i++) {
             var factoryTokenAddress = await factory.tokens(i);
             if (i<3){
@@ -51,6 +62,10 @@ module.exports = function(deployer) {
             console.log(factoryTokenAddress);
             console.log(await factory.token(factoryTokenAddress));
          }
+         */
     });
+    
 }
+
+
 
