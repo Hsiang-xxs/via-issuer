@@ -4,8 +4,7 @@
 pragma solidity >=0.5.0 <0.7.0;
 
 import "./erc/ERC20.sol";
-import "./oraclize/ViaRate.sol";
-import "./oraclize/EthToUSD.sol";
+import "./oraclize/ViaOracle.sol";
 import "abdk-libraries-solidity/ABDKMathQuad.sol";
 import "@openzeppelin/upgrades/contracts/Initializable.sol";
 import "@openzeppelin/contracts-ethereum-package/contracts/ownership/Ownable.sol";
@@ -19,6 +18,9 @@ contract Bond is ERC20, Initializable, Ownable {
 
     //via token factory address
     Factory private factory;
+
+    //via oracle
+    ViaOracle private oracle;
 
     //name of Via token (eg, Via-USD%)
     bytes32 public name;
@@ -70,9 +72,10 @@ contract Bond is ERC20, Initializable, Ownable {
     event ViaBondRedeemed(bytes32 currency, uint value, uint price, uint tenure);
 
     //initiliaze proxies
-    function initialize(bytes32 _name, address _owner) public {
+    function initialize(bytes32 _name, address _owner, address _oracle) public {
         Ownable.initialize(_owner);
         factory = Factory(_owner);
+        oracle = ViaOracle(_oracle);
         name = _name;
         symbol = _name;
     }
@@ -142,30 +145,32 @@ contract Bond is ERC20, Initializable, Ownable {
                 ViaXid = "1234"; //only for testing
                 conversionQ[ViaXid] = conversion("issue", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0), ViaRateId, ABDKMathQuad.fromUInt(0));
                 conversions.push(ViaXid);
-                new EthToUSD().update("Bond", address(this));
-                new ViaRate().requestPost(abi.encodePacked("Via_USD_to_", name),"ver","Bond", address(this));
+                //new EthToUSD().update("Bond", address(this));
+                oracle.requestPost("eth","ethusd","EthBond", address(this));
+                oracle.requestPost(abi.encodePacked("Via_USD_to_", name),"ver","EthBond", address(this));
             }
             else{
                 EthXid = "9101112"; //only for testing
                 conversionQ[EthXid] = conversion("issue", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0), ViaRateId, ABDKMathQuad.fromUInt(0));
                 conversions.push(EthXid);
-                new EthToUSD().update("Bond", address(this));
+                //new EthToUSD().update("Bond", address(this));
+                oracle.requestPost("eth","ethusd","EthBond", address(this));
             }
         }
         else{
             ViaXid = "1234"; //only for testing
-            new ViaRate().requestPost(abi.encodePacked(currency, "_to_", name),"er","Bond", address(this));
+            oracle.requestPost(abi.encodePacked(currency, "_to_", name),"er","Bond", address(this));
             if(currency!="Via-USD"){
                 ViaRateId = "5678"; //only for testing
                 conversionQ[ViaXid] = conversion("issue", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0), ViaRateId, ABDKMathQuad.fromUInt(0));
                 conversions.push(ViaXid);
-                new ViaRate().requestPost(abi.encodePacked("Via_USD_to_", currency), "ir","Bond",address(this));
+                oracle.requestPost(abi.encodePacked("Via_USD_to_", currency), "ir","Bond",address(this));
             }
             else{
                 ViaRateId = "5678"; //only for testing
                 conversionQ[ViaXid] = conversion("issue", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0), ViaRateId, ABDKMathQuad.fromUInt(0));
                 conversions.push(ViaXid);
-                new ViaRate().requestPost("USD", "ir","Bond",address(this));
+                oracle.requestPost("USD", "ir","Bond",address(this));
             }
         }
         //conversionQ[ViaXid] = conversion("issue", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0), ViaRateId, ABDKMathQuad.fromUInt(0));
@@ -195,17 +200,18 @@ contract Bond is ERC20, Initializable, Ownable {
                 //call Via oracle
                 if(currency=="ether"){
                     EthXid = "9101112"; //only for testing
-                    new EthToUSD().update("Bond", address(this));
+                    //new EthToUSD().update("Bond", address(this));
+                    oracle.requestPost("eth","ethusd","EthBond", address(this));
                     ViaXid = "3456"; //only for testing
                     conversionQ[ViaXid] = conversion("redeem", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), tokenName, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0));
                     conversions.push(ViaXid);
-                    new ViaRate().requestPost(abi.encodePacked(tokenName, "_to_Via_USD"),"ver","Bond", address(this));
+                    oracle.requestPost(abi.encodePacked(tokenName, "_to_Via_USD"),"ver","EthBond", address(this));
                 }
                 else{
                     ViaXid = "1234"; //only for testing
                     conversionQ[ViaXid] = conversion("redeem", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), tokenName, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0));
                     conversions.push(ViaXid);
-                    new ViaRate().requestPost(abi.encodePacked(tokenName, "_to_", currency),"er","Bond", address(this));
+                    oracle.requestPost(abi.encodePacked(tokenName, "_to_", currency),"er","Bond", address(this));
                 }
                 //conversionQ[ViaXid] = conversion("redeem", buyer, amount, currency, EthXid, ABDKMathQuad.fromUInt(0), name, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0));
                 //conversions.push(ViaXid);
