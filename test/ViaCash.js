@@ -20,7 +20,7 @@ contract("CashContractSize", function(accounts) {
     });
   });
 
-contract("ViaUSDCash", async (accounts) => {
+contract("IssuingViaUSD", async (accounts) => {
     it("should send ether to Via-USD cash contract and then get some Via-USD cash tokens", async () => {
         var abdkMathQuad = await ABDKMathQuad.deployed();
         await Cash.link(abdkMathQuad);
@@ -33,16 +33,38 @@ contract("ViaUSDCash", async (accounts) => {
         var viausdCashAddress = await factory.tokens(0);
         var viausdCashName = await web3.utils.hexToUtf8(await factory.getName(viausdCashAddress));
         var viausdCashType = await web3.utils.hexToUtf8(await factory.getType(viausdCashAddress));
-        var viausdCash = await Cash.at(viausdCashAddress);
 
         console.log(viausdCashName, viausdCashType, "token address:", viausdCashAddress);
         console.log(viausdCashName, viausdCashType, "token contract ether balance before sending ether:", await web3.eth.getBalance(viausdCashAddress));
         console.log("Account address:", accounts[0]);
         console.log("Account ether balance before sending ether:", await web3.eth.getBalance(accounts[0]));
         
-        await viausdCash.sendTransaction({from:accounts[0], to:viausdCashAddress});
+        var txHash = await web3.eth.sendTransaction({from:accounts[0], to:viausdCashAddress, value:1});
         
+        console.log("Transaction hash", txHash);
         console.log("Via-USD cash token contract ether balance after sending ether:", await web3.eth.getBalance(viausdCashAddress));
         console.log("Account ether balance after sending ether:", await web3.eth.getBalance(accounts[0]));
+        //to do : check Via-USD balance in sender account
     });
+});
+
+//to do :
+contract("ViaUSDExchange", async (accounts) => {
+  it("should send Via-USD to Via-EUR cash contract and then get some Via-EUR cash tokens", async () => {
+
+  });
+});
+
+//to do :
+contract("ViaUSDRedemption", async (accounts) => {
+  it("should send Via-USD to Via-USD cash contract and then get ether sent during issuing process", async () => {
+
+  });
+});
+
+// to do :
+contract("TransferViaUSD", async (accounts) => {
+  it("should transfer Via-USD to another account", async () => {
+
+  });
 });
