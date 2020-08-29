@@ -39,10 +39,10 @@ contract Factory is ProxyFactory {
     }
 
     //token factory 
-    function createToken(address _target, bytes32 tokenName, bytes32 tokenType) external{
+    function createToken(address _target, bytes32 tokenName, bytes32 tokenType, address _oracle) external{
         address _owner = msg.sender;
 
-        bytes memory _payload = abi.encodeWithSignature("initialize(bytes32,address)", tokenName, _owner);
+        bytes memory _payload = abi.encodeWithSignature("initialize(bytes32,address,address)", tokenName, _owner, _oracle);
 
         // Deploy proxy
         address _via = deployMinimal(_target, _payload);
