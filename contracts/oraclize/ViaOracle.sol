@@ -122,7 +122,7 @@ contract ViaOracle is usingProvable {
         } else {
             if(_ratetype == "er" || _ratetype == "ver"){
                 emit LogNewProvableQuery("Provable query was sent for Via oracle rates, standing by for the answer...");
-                bytes32 queryId = "1234"; //provable_query("URL", abi.encodePacked("json(https://url/rates/",_ratetype,"/",_currency,").rate"));  
+                bytes32 queryId = provable_query("URL", string(abi.encodePacked("json(https://url/rates/",_ratetype,"/",_currency,").rate")));  
                 params memory p = pendingQueries[queryId];
                 p.caller = _tokenContract;
                 p.tokenType = _tokenType;
@@ -131,7 +131,7 @@ contract ViaOracle is usingProvable {
             }
             else if(_ratetype == "ir"){
                 emit LogNewProvableQuery("Provable query was sent for Via oracle rates, standing by for the answer...");
-                bytes32 queryId = "5678"; //provable_query("URL", abi.encodePacked("json(https://url/rates/",_ratetype,"/",_currency,").rate"));
+                bytes32 queryId = provable_query("URL", string(abi.encodePacked("json(https://url/rates/",_ratetype,"/",_currency,").rate")));
                 params memory p = pendingQueries[queryId];
                 p.caller = _tokenContract;
                 p.tokenType = _tokenType;
