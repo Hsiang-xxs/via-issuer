@@ -31,7 +31,9 @@ contract ViaOracle is usingProvable {
     constructor()
         public
     {
-        // provable_setProof(proofType_TLSNotary | proofStorage_IPFS);
+        // note : replace OAR if you are testing Oracle with ethereum-bridge (https://github.com/provable-things/ethereum-bridge)
+        OAR = OracleAddrResolverI(0x6f485C8BF6fc43eA212E93BBF8ce046C7f1cb475); 
+        provable_setProof(proofType_TLSNotary | proofStorage_IPFS);
     }
 
     function __callback(
@@ -110,4 +112,41 @@ contract ViaOracle is usingProvable {
         //}        
     }
 
+    function request(bytes memory _currency, bytes32 _ratetype, bytes32 _tokenType, address payable _tokenContract)
+        public
+        payable
+        returns (bytes32)
+    {  
+        if (provable_getPrice("URL") > address(this).balance) {
+            emit LogNewProvableQuery("Provable query was NOT sent, please add some ETH to cover for the query fee!");
+        } else {
+            if(_ratetype == "er" || _ratetype == "ver"){
+                emit LogNewProvableQuery("Provable query was sent for Via oracle rates, standing by for the answer...");
+                bytes32 queryId = provable_query("URL", "oracleurlhere"); 
+                params memory p = pendingQueries[queryId];
+                p.caller = _tokenContract;
+                p.tokenType = _tokenType;
+                p.rateType = _ratetype;
+                return queryId;
+            }
+            else if(_ratetype == "ir"){
+                emit LogNewProvableQuery("Provable query was sent for Via oracle rates, standing by for the answer...");
+                bytes32 queryId = provable_query("URL", "oracleurlhere");
+                params memory p = pendingQueries[queryId];
+                p.caller = _tokenContract;
+                p.tokenType = _tokenType;
+                p.rateType = _ratetype;
+                return queryId;
+            }
+            else if(_ratetype == "ethusd"){
+                emit LogNewProvableQuery("Provable query was sent for ETH-USD, standing by for the answer...");
+                bytes32 queryId = provable_query("URL", "json(https://api.pro.coinbase.com/products/ETH-USD/ticker).price");
+                params memory p = pendingQueries[queryId];
+                p.caller = _tokenContract;
+                p.tokenType = _tokenType;
+                p.rateType = _ratetype;
+                return queryId;
+            }
+        }        
+    }
 }
