@@ -19,7 +19,7 @@ This implementation follows the ERC20 standard because we want the Via to be usa
 
 ### To build and deploy locally:
 1.  To compile the project, change to the root of the directory where the project is located:\
-``` cd <the root of the directory where the project is located> ```
+    ``` cd <the root of the directory where the project is located> ```
 
 2.  Install Oraclize's ethereum-bridge 
 
@@ -31,10 +31,10 @@ This implementation follows the ERC20 standard because we want the Via to be usa
 
 4.  For local testing make sure to have a test blockchain such as Ganache or [Ganache Cli] installed and running before executing migrate:
 
-If you use Ganache, please directly open the Ganache and create *NEW WORKSPACE*, and then add the truffle-config.js or truffle.js file to this workspace, note to set the *PORT NUMBER*.
+    If you use Ganache, please directly open the Ganache and create *NEW WORKSPACE*, and then add the truffle-config.js or truffle.js file to this workspace, note to     set the *PORT NUMBER*.
 
-If you use the [Ganache Cli] for the test. please open the new terminal window and run the ganache-cli first:\
-``` ganache-cli --allowUnlimitedContractSize ```
+    If you use the [Ganache Cli] for the test. please open the new terminal window and run the ganache-cli first:\
+    ``` ganache-cli --allowUnlimitedContractSize ```
 
 5.  Start ethereum-bridge for Oraclize by opening a new terminal
 

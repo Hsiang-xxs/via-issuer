@@ -2,7 +2,7 @@ const Factory = artifacts.require('Factory');
 const Cash = artifacts.require('Cash');
 const stringutils = artifacts.require('stringutils');
 const ABDKMathQuad = artifacts.require('ABDKMathQuad');
-const oracle = artifacts.require('ViaOracle');
+const ViaOracle = artifacts.require('ViaOracle');
 
 web3.setProvider("http://127.0.0.1:8545");
 
@@ -28,6 +28,9 @@ contract("IssuingViaUSD", async (accounts) => {
         var factory = await Factory.deployed();
         var cash = await Cash.deployed();
         
+        var oracle = await ViaOracle.deployed();
+        ViaOracle.setProvider(web3.currentProvider);        
+        
         await factory.createToken(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"), oracle.address);
         
         var viausdCashAddress = await factory.tokens(0);
@@ -51,7 +54,7 @@ contract("IssuingViaUSD", async (accounts) => {
         //to do : check Via-USD balance in sender account
     });
 });
-
+/*
 contract("ViaUSDExchange", async (accounts) => {
   it("should send Via-USD to Via-EUR cash contract and then get some Via-EUR cash tokens", async () => {
     var abdkMathQuad = await ABDKMathQuad.deployed();
@@ -136,7 +139,7 @@ contract("ViaUSDRedemption", async (accounts) => {
     console.log("Account ether balance after sending Via-USD:", await web3.eth.getBalance(accounts[0]));
     console.log("Account Via-USD cash token balance after sending Via-USD:", await viausdCash.balanceOf(accounts[0]));
   });
-});
+});*/
 
 contract("TransferViaUSD", async (accounts) => {
   it("should transfer Via-USD to another account", async () => {
@@ -145,6 +148,7 @@ contract("TransferViaUSD", async (accounts) => {
 
     var factory = await Factory.deployed();
     var cash = await Cash.deployed();
+    var oracle = await ViaOracle.deployed();
     
     await factory.createToken(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"), oracle.address);
     

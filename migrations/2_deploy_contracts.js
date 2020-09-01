@@ -20,7 +20,7 @@ module.exports = function(deployer) {
     deployer.link(ABDKMathQuad,[Cash, Bond, ViaOracle, ERC20]);
 
     deployer.deploy(usingProvable);
-    deployer.deploy(ViaOracle);
+    deployer.deploy(ViaOracle);//,{from: accounts[0], gas:6721975, value: 500000000000000000});
     deployer.deploy(ERC20);
     deployer.deploy(Cash);
     deployer.deploy(Bond);
