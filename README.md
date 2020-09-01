@@ -21,16 +21,26 @@ This implementation follows the ERC20 standard because we want the Via to be usa
 1.  To compile the project, change to the root of the directory where the project is located:\
 ``` cd <the root of the directory where the project is located> ```
 
-2.  ``` truffle compile ```
+2.  Install Oraclize's ethereum-bridge 
 
-3.  For local testing make sure to have a test blockchain such as Ganache or [Ganache Cli] installed and running before executing migrate:
+    ``` npm install -g ethereum-bridge ```
+
+    And copy ``` OAR = OracleAddrResolverI(0x..............);``` to the constructor in ViaOracle.sol in \contracts\oraclize folder
+
+3.  ``` truffle compile ```
+
+4.  For local testing make sure to have a test blockchain such as Ganache or [Ganache Cli] installed and running before executing migrate:
 
 If you use Ganache, please directly open the Ganache and create *NEW WORKSPACE*, and then add the truffle-config.js or truffle.js file to this workspace, note to set the *PORT NUMBER*.
 
 If you use the [Ganache Cli] for the test. please open the new terminal window and run the ganache-cli first:\
 ``` ganache-cli --allowUnlimitedContractSize ```
 
-4.  ``` truffle migrate ```
+5.  Start ethereum-bridge for Oraclize by opening a new terminal
+
+    ``` ethereum-bridge -H localhost:9545 -a 1 ```
+
+6.  ``` truffle migrate ```
 
 ### To compile and deploy to the Ropsten testnet:
 
