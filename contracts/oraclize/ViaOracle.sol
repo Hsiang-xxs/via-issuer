@@ -30,6 +30,7 @@ contract ViaOracle is usingProvable {
 
     constructor()
         public
+        payable
     {
         // note : replace OAR if you are testing Oracle with ethereum-bridge (https://github.com/provable-things/ethereum-bridge)
         OAR = OracleAddrResolverI(0x6f485C8BF6fc43eA212E93BBF8ce046C7f1cb475); 

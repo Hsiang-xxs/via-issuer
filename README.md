@@ -34,7 +34,7 @@ This implementation follows the ERC20 standard because we want the Via to be usa
     If you use Ganache, please directly open the Ganache and create *NEW WORKSPACE*, and then add the truffle-config.js or truffle.js file to this workspace, note to     set the *PORT NUMBER*.
 
     If you use the [Ganache Cli] for the test. please open the new terminal window and run the ganache-cli first:\
-    ``` ganache-cli --allowUnlimitedContractSize ```
+    ``` ganache-cli ```
 
 5.  Start ethereum-bridge for Oraclize by opening a new terminal
 
