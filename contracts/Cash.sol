@@ -403,7 +403,7 @@ contract Cash is ERC20, Initializable, Ownable {
     function convertToVia(bytes16 amount, bytes32 paid_in_currency, bytes16 ethusd, bytes16 viarate) private returns(bytes16){
         if(paid_in_currency=="ether"){
             //to first convert amount of ether passed to this function to USD
-            bytes16 amountInUSD = ABDKMathQuad.mul(ABDKMathQuad.div(amount,ABDKMathQuad.fromUInt(10^18)),ethusd);
+            bytes16 amountInUSD = ABDKMathQuad.mul(ABDKMathQuad.div(amount, ABDKMathQuad.fromUInt(10^18)),ethusd);
             //to then convert USD to Via-currency if currency of this contract is not USD itself
             if(name!="Via-USD"){
                 bytes16 inVia = ABDKMathQuad.mul(amountInUSD, viarate);
