@@ -11,8 +11,8 @@ const usingProvable = artifacts.require('usingProvable');
 const ERC20 = artifacts.require('ERC20');
 
 
-module.exports = function(deployer) {
-
+module.exports = function(deployer, network, accounts) {
+    
     deployer.deploy(stringutils);
     deployer.link(stringutils, [Bond, Cash, ViaOracle]);
 
@@ -20,7 +20,7 @@ module.exports = function(deployer) {
     deployer.link(ABDKMathQuad,[Cash, Bond, ViaOracle, ERC20]);
 
     deployer.deploy(usingProvable);
-    deployer.deploy(ViaOracle);//,{from: accounts[0], gas:6721975, value: 500000000000000000});
+    deployer.deploy(ViaOracle, {from: accounts[0], value: 1e18});
     deployer.deploy(ERC20);
     deployer.deploy(Cash);
     deployer.deploy(Bond);
@@ -46,10 +46,10 @@ module.exports = function(deployer) {
             console.log("Token type:", web3.utils.hexToUtf8(await factory.getType(factoryTokenAddress)));
             console.log();
         }       
-        
     });
     
 }
+
 
 
 
