@@ -26,7 +26,7 @@ contract ViaOracle is usingProvable {
     mapping (bytes32 => params) public pendingQueries;
 
     event LogNewProvableQuery(string description);
-    event LogResult(bytes32 tokenType, bytes32 rateType, string result);
+    event LogResult(address payable caller, bytes32 myid, bytes32 tokenType, bytes32 rateType, string result);
 
     constructor()
         public
@@ -45,11 +45,11 @@ contract ViaOracle is usingProvable {
         public 
     {
         //to do : lines below throw error
-        //require(msg.sender == provable_cbAddress());
+        require(msg.sender == provable_cbAddress());
         //require (pendingQueries[_myid].tokenType == "Cash" || pendingQueries[_myid].tokenType == "Bond"
         //    || pendingQueries[_myid].tokenType == "EthCash" || pendingQueries[_myid].tokenType == "EthBond");
 
-        emit LogResult(pendingQueries[_myid].tokenType, pendingQueries[_myid].rateType, _result);
+        emit LogResult(pendingQueries[_myid].caller, _myid, pendingQueries[_myid].tokenType, pendingQueries[_myid].rateType, _result);
         
         if(pendingQueries[_myid].tokenType == "Cash"){
             Cash cash = Cash(pendingQueries[_myid].caller);
@@ -67,8 +67,8 @@ contract ViaOracle is usingProvable {
             Bond bond = Bond(pendingQueries[_myid].caller);
             bond.convert(_myid, ABDKMathQuad.fromUInt(_result.stringToUint()), pendingQueries[_myid].rateType);
         }
-        //to do : following line also throws error
-        //delete pendingQueries[_myid]; 
+
+        delete pendingQueries[_myid]; 
     }
 
     function request(bytes memory _currency, bytes32 _ratetype, bytes32 _tokenType, address payable _tokenContract)
@@ -80,30 +80,31 @@ contract ViaOracle is usingProvable {
             emit LogNewProvableQuery("Provable query was NOT sent, please add some ETH to cover for the query fee!");
         } else {
             if(_ratetype == "er" || _ratetype == "ver"){
-                emit LogNewProvableQuery("Provable query was sent for Via oracle rates, standing by for the answer...");
                 bytes32 queryId = provable_query("URL", string(abi.encodePacked("json(https://url/rates/er/",_currency,").rate")));  
                 params memory p = pendingQueries[queryId];
                 p.caller = _tokenContract;
                 p.tokenType = _tokenType;
                 p.rateType = _ratetype;
+                emit LogNewProvableQuery(string(abi.encodePacked("Provable query was sent for Via exchange rates, with query id= ",queryId,
+                                        " token type= ",_tokenType," rate type= ",_ratetype," currency= ", 
+                                        _currency," standing by for the answer...")));
                 return queryId;
             }
             else if(_ratetype == "ir"){
-                emit LogNewProvableQuery("Provable query was sent for Via oracle rates, standing by for the answer...");
                 bytes32 queryId = provable_query("URL", string(abi.encodePacked("json(https://url/rates/ir/",_currency,").rate")));
                 params memory p = pendingQueries[queryId];
                 p.caller = _tokenContract;
                 p.tokenType = _tokenType;
                 p.rateType = _ratetype;
+                emit LogNewProvableQuery(string(abi.encodePacked("Provable query was sent for Via interest rates, with query id= ",queryId,
+                                        " token type= ",_tokenType," rate type= ",_ratetype," currency= ", 
+                                        _currency," standing by for the answer...")));
                 return queryId;
             }
             else if(_ratetype == "ethusd"){
-                emit LogNewProvableQuery("Provable query was sent for ETH-USD, standing by for the answer...");
                 bytes32 queryId = provable_query("URL", "json(https://api.pro.coinbase.com/products/ETH-USD/ticker).price");
-                params memory p = pendingQueries[queryId];
-                p.caller = _tokenContract;
-                p.tokenType = _tokenType;
-                p.rateType = _ratetype;
+                pendingQueries[queryId] = params(_tokenContract, _tokenType, _ratetype);
+                emit LogNewProvableQuery("Provable query was sent for ETH-USD, standing by for the answer...");
                 return queryId;
             }
         }        

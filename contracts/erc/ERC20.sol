@@ -39,14 +39,13 @@ contract ERC20{
     }
 
     function transfer(address receiver, uint tokens) public returns (bool){
-        require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),balances[msg.sender])==-1 || 
-                ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),balances[msg.sender])==0);
-        //require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),balances[msg.sender])==0);
-        balances[msg.sender] = ABDKMathQuad.sub(balances[msg.sender], ABDKMathQuad.fromUInt(tokens));
+        require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),balances[address(this)])==-1 || 
+                ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),balances[address(this)])==0);
+        balances[address(this)] = ABDKMathQuad.sub(balances[address(this)], ABDKMathQuad.fromUInt(tokens));
         balances[receiver] = ABDKMathQuad.add(balances[receiver], ABDKMathQuad.fromUInt(tokens));
-        emit Transfer(msg.sender, receiver, tokens);
+        emit Transfer(address(this), receiver, tokens);
         return true;
-    }
+    }    
 
     function approve(address spender, uint tokens)  public returns (bool){
         allowed[msg.sender][spender] = ABDKMathQuad.fromUInt(tokens);

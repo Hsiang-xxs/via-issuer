@@ -1,3 +1,6 @@
+const assert = require("chai").assert;
+const truffleAssert = require('truffle-assertions');
+
 const Factory = artifacts.require('Factory');
 const Cash = artifacts.require('Cash');
 const stringutils = artifacts.require('stringutils');
@@ -42,16 +45,25 @@ contract("IssuingViaUSD", async (accounts) => {
         console.log("Account ether balance before sending ether:", await web3.eth.getBalance(accounts[0]));
         console.log("Account Via-USD cash token balance before sending ether:", await viausdCash.balanceOf(accounts[0]));
         console.log();
-        
-        await viausdCash.sendTransaction({from:accounts[0], to:viausdCashAddress, value:1e18});
-        
-        console.log("Via-USD cash token contract ether balance after sending ether:", await web3.eth.getBalance(viausdCashAddress));
-        console.log("Account ether balance after sending ether:", await web3.eth.getBalance(accounts[0]));
-        console.log("Account Via-USD cash token balance after sending ether:", await viausdCash.balanceOf(accounts[0]));
-        //to do : check Via-USD balance in sender account
-    });
-});
 
+        await viausdCash.sendTransaction({from:accounts[0], to:viausdCashAddress, value:1e18});
+        console.log("Via-USD cash token contract ether balance after sending ether:", await web3.eth.getBalance(viausdCashAddress));
+        console.log("Account ether balance after sending ether:", await web3.eth.getBalance(accounts[0]));  
+        
+        let callbackToViaOracle = await getFirstEvent(oracle.LogResult({fromBlock:'latest'}));
+        await truffleAssert.createTransactionResult(oracle, callbackToViaOracle.transactionHash);
+
+        console.log("Account Via-USD cash token balance after sending ether:", await viausdCash.balanceOf(accounts[0]));
+        
+    });
+
+    const getFirstEvent = (_event) => {
+      return new Promise((resolve, reject) => {
+        _event.once('data', resolve).once('error', reject)
+      });
+    }
+});
+/*
 contract("ViaUSDExchange", async (accounts) => {
   it("should send Via-USD to Via-EUR cash contract and then get some Via-EUR cash tokens", async () => {
     var abdkMathQuad = await ABDKMathQuad.deployed();
@@ -180,4 +192,4 @@ contract("TransferViaUSD", async (accounts) => {
     console.log("Receiver ether balance after sending Via-USD:", await web3.eth.getBalance(accounts[1]));
     console.log("Receiver Via-USD cash token balance after sending Via-USD:", await viausdCash.balanceOf(accounts[1]));
   });
-});
+});*/

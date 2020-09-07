@@ -54,6 +54,8 @@ contract Cash is ERC20, Initializable, Ownable {
     //events to capture and report to Via oracle
     event ViaCashIssued(bytes32 currency, bytes16 value);
     event ViaCashRedeemed(bytes32 currency, bytes16 value);
+    event Callback(bytes32 txId, bytes16 result, bytes32 rtype);
+    event Requested(bytes32 id);
 
     //initiliaze proxies
     function initialize(bytes32 _name, address _owner, address _oracle) public {
@@ -174,15 +176,17 @@ contract Cash is ERC20, Initializable, Ownable {
             //since the exchange rate of USD to Via-USD is always 1
             else{
                 EthXid = oracle.request("eth","ethusd","EthCash", address(this)); 
-                conversion memory c = conversionQ[EthXid];
-                c.operation = "issue";
-                c.party = buyer;
-                c.amount = amount;
-                c.paid_in_currency = currency;
-                c.EthXid = EthXid;
-                c.EthXvalue = ABDKMathQuad.fromUInt(0);
-                c.payout_currency = name;
-                c.ViaXvalue =ABDKMathQuad.fromUInt(1);
+                emit Requested(EthXid);
+                conversionQ[EthXid] = conversion(buyer, "issue", currency, name, EthXid, amount, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(1));
+                //conversion memory c = conversionQ[EthXid];
+                //c.operation = "issue";
+                //c.party = buyer;
+                //c.amount = amount;
+                //c.paid_in_currency = currency;
+                //c.EthXid = EthXid;
+                //c.EthXvalue = ABDKMathQuad.fromUInt(0);
+                //c.payout_currency = name;
+                //c.ViaXvalue =ABDKMathQuad.fromUInt(1);
             }
         }
         //if ether is not paid in and instead, some other Via cash token is paid in
@@ -268,10 +272,11 @@ contract Cash is ERC20, Initializable, Ownable {
         else
             //redemption is complete when amount to redeem becomes zero
             return true;
-    }
+    }    
 
-    //function called back from Oraclize
+    //function called back from Via oracle
     function convert(bytes32 txId, bytes16 result, bytes32 rtype) public {
+        emit Callback(txId, result, rtype);
         //check type of result returned
         if(rtype =="ethusd"){
             conversionQ[txId].EthXvalue = result;
@@ -326,7 +331,7 @@ contract Cash is ERC20, Initializable, Ownable {
     //via is the number of this via cash token that is being issued, party is the user account address to which issued tokens are credited
     function finallyIssue(bytes16 via, address party) private {
         //add via to this contract's balance first (ie issue them first)
-        ABDKMathQuad.add(balances[address(this)], via);
+        balances[address(this)] = ABDKMathQuad.add(balances[address(this)], via);
         //transfer amount to buyer 
         transfer(party, ABDKMathQuad.toUInt(via));
         //adjust total supply
@@ -403,7 +408,7 @@ contract Cash is ERC20, Initializable, Ownable {
     function convertToVia(bytes16 amount, bytes32 paid_in_currency, bytes16 ethusd, bytes16 viarate) private returns(bytes16){
         if(paid_in_currency=="ether"){
             //to first convert amount of ether passed to this function to USD
-            bytes16 amountInUSD = ABDKMathQuad.mul(ABDKMathQuad.div(amount, ABDKMathQuad.fromUInt(10^18)),ethusd);
+            bytes16 amountInUSD = ABDKMathQuad.mul(amount, ethusd);
             //to then convert USD to Via-currency if currency of this contract is not USD itself
             if(name!="Via-USD"){
                 bytes16 inVia = ABDKMathQuad.mul(amountInUSD, viarate);
@@ -435,5 +440,5 @@ contract Cash is ERC20, Initializable, Ownable {
             return ABDKMathQuad.mul(viarate, amount);
         }
     }
-
+    
 }
