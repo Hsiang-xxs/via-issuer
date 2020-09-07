@@ -54,8 +54,6 @@ contract Cash is ERC20, Initializable, Ownable {
     //events to capture and report to Via oracle
     event ViaCashIssued(bytes32 currency, bytes16 value);
     event ViaCashRedeemed(bytes32 currency, bytes16 value);
-    event Callback(bytes32 txId, bytes16 result, bytes32 rtype);
-    event Requested(bytes32 id);
 
     //initiliaze proxies
     function initialize(bytes32 _name, address _owner, address _oracle) public {
@@ -106,9 +104,9 @@ contract Cash is ERC20, Initializable, Ownable {
             //owner should have more tokens than being transferred
             require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), balances[sender])==-1 || ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), balances[sender])==0);
             //sending contract should be allowed by token owner to make this transfer
-            require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), allowed[sender][msg.sender])==-1 || ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), allowed[sender][msg.sender])==0);
+            //require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), allowed[sender][msg.sender])==-1 || ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), allowed[sender][msg.sender])==0);
             balances[sender] = ABDKMathQuad.sub(balances[sender], ABDKMathQuad.fromUInt(tokens));
-            allowed[sender][msg.sender] = ABDKMathQuad.sub(allowed[sender][msg.sender], ABDKMathQuad.fromUInt(tokens));
+            //allowed[sender][msg.sender] = ABDKMathQuad.sub(allowed[sender][msg.sender], ABDKMathQuad.fromUInt(tokens));
             balances[receiver] = ABDKMathQuad.add(balances[receiver], ABDKMathQuad.fromUInt(tokens));
             emit Transfer(sender, receiver, tokens);
             return true;
@@ -162,23 +160,8 @@ contract Cash is ERC20, Initializable, Ownable {
             if(name!="Via-USD"){
                 ViaXid = oracle.request(abi.encodePacked("Via_USD_to_", name),"ver","Cash", address(this)); 
                 EthXid = oracle.request("eth","ethusd","EthCash", address(this)); 
-                conversion memory c = conversionQ[ViaXid];
-                c.operation = "issue";
-                c.party = buyer;
-                c.amount = amount;
-                c.paid_in_currency = currency;
-                c.EthXid = EthXid;
-                c.EthXvalue = ABDKMathQuad.fromUInt(0);
-                c.payout_currency = name;
-                c.ViaXvalue =ABDKMathQuad.fromUInt(0);
-            }
-            //if ether is paid in for issue of Via-USD cash token, then all we need is the exchange rate of ether to USD (ethusd)
-            //since the exchange rate of USD to Via-USD is always 1
-            else{
-                EthXid = oracle.request("eth","ethusd","EthCash", address(this)); 
-                emit Requested(EthXid);
-                conversionQ[EthXid] = conversion(buyer, "issue", currency, name, EthXid, amount, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(1));
-                //conversion memory c = conversionQ[EthXid];
+                conversionQ[ViaXid] = conversion(buyer, "issue", currency, name, EthXid, amount, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0));
+                //conversion memory c = conversionQ[ViaXid];
                 //c.operation = "issue";
                 //c.party = buyer;
                 //c.amount = amount;
@@ -186,22 +169,29 @@ contract Cash is ERC20, Initializable, Ownable {
                 //c.EthXid = EthXid;
                 //c.EthXvalue = ABDKMathQuad.fromUInt(0);
                 //c.payout_currency = name;
-                //c.ViaXvalue =ABDKMathQuad.fromUInt(1);
+                //c.ViaXvalue =ABDKMathQuad.fromUInt(0);
+            }
+            //if ether is paid in for issue of Via-USD cash token, then all we need is the exchange rate of ether to USD (ethusd)
+            //since the exchange rate of USD to Via-USD is always 1
+            else{
+                EthXid = oracle.request("eth","ethusd","EthCash", address(this)); 
+                conversionQ[EthXid] = conversion(buyer, "issue", currency, name, EthXid, amount, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(1));
             }
         }
         //if ether is not paid in and instead, some other Via cash token is paid in
         //we need to find the exchange rate between the paid in Via cash token and the cash token this cash contract represents
         else{
             ViaXid = oracle.request(abi.encodePacked(currency, "_to_", name),"er","Cash", address(this)); 
-            conversion memory c = conversionQ[ViaXid];
-            c.operation = "issue";
-            c.party = buyer;
-            c.amount = amount;
-            c.paid_in_currency = currency;
-            c.EthXid = ABDKMathQuad.fromUInt(0);
-            c.EthXvalue = ABDKMathQuad.fromUInt(0);
-            c.payout_currency = name;
-            c.ViaXvalue =ABDKMathQuad.fromUInt(0);
+            conversionQ[ViaXid] = conversion(buyer, "issue", currency, name, ABDKMathQuad.fromUInt(0), amount, ABDKMathQuad.fromUInt(0), ABDKMathQuad.fromUInt(0));
+            //conversion memory c = conversionQ[ViaXid];
+            //c.operation = "issue";
+            //c.party = buyer;
+            //c.amount = amount;
+            //c.paid_in_currency = currency;
+            //c.EthXid = ABDKMathQuad.fromUInt(0);
+            //c.EthXvalue = ABDKMathQuad.fromUInt(0);
+            //c.payout_currency = name;
+            //c.ViaXvalue =ABDKMathQuad.fromUInt(0);
         }
         return true;
     }
@@ -276,7 +266,6 @@ contract Cash is ERC20, Initializable, Ownable {
 
     //function called back from Via oracle
     function convert(bytes32 txId, bytes16 result, bytes32 rtype) public {
-        emit Callback(txId, result, rtype);
         //check type of result returned
         if(rtype =="ethusd"){
             conversionQ[txId].EthXvalue = result;
@@ -408,7 +397,7 @@ contract Cash is ERC20, Initializable, Ownable {
     function convertToVia(bytes16 amount, bytes32 paid_in_currency, bytes16 ethusd, bytes16 viarate) private returns(bytes16){
         if(paid_in_currency=="ether"){
             //to first convert amount of ether passed to this function to USD
-            bytes16 amountInUSD = ABDKMathQuad.mul(amount, ethusd);
+            bytes16 amountInUSD = ABDKMathQuad.div(ABDKMathQuad.mul(amount, ethusd), ABDKMathQuad.fromUInt(1000000000000000000));
             //to then convert USD to Via-currency if currency of this contract is not USD itself
             if(name!="Via-USD"){
                 bytes16 inVia = ABDKMathQuad.mul(amountInUSD, viarate);
