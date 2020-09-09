@@ -137,7 +137,7 @@ contract Cash is ERC20, Initializable, Ownable {
             return false;
         }
     }
-    
+
     //requesting issue of Via to buyer for amount of ether or some other via cash token paid in and stored in cashContract
     function issue(bytes16 amount, address buyer, bytes32 currency, address cashContract) private returns(bool){
         //ensure that brought amount is not zero
