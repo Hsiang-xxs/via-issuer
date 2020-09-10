@@ -206,6 +206,19 @@ contract("ViaUSDRedemption", async (accounts) => {
   });
 });
 
+contract("ViaEURRedemption", async (accounts) => {
+  it("should send Via-EUR tokens to Via-EUR contract and get back ether paid in earlier", async () => {
+
+  });
+});
+
+contract("ViaUSDRedemptionInEUR", async (accounts) => {
+  it("should send Via-USD tokens to Via-USD contract and get back Via-EUR tokens paid in earlier", async () => {
+    //should do what ViaUSDExchange contract is doing - ie, pay in of Via-EUR cash to Via-USD contract to get Via-USD cash tokens
+    //and then should send back Via-USD cash tokens to Via-USD contract which should return back Via-EUR paid in earlier
+  });
+});
+
 contract("TransferViaUSD", async (accounts) => {
   it("should transfer Via-USD to another account", async () => {
     var abdkMathQuad = await ABDKMathQuad.deployed();

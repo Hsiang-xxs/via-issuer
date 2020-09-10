@@ -24,7 +24,7 @@ contract("BondContractSize", function(accounts) {
   });
 
   contract("IssuingViaUSDBond", async (accounts) => {
-    it("should send ether to Via-USD bond contract and then get some Via-USD bond tokens", async () => {
+    it("should send ether to Via-USD bond contract and then get some Via-USD bond tokens to sender (issuer)", async () => {
         var abdkMathQuad = await ABDKMathQuad.deployed();
         await Bond.link(abdkMathQuad);
 
@@ -113,4 +113,49 @@ contract("TransferViaUSDBond", async (accounts) => {
       _event.once('data', resolve).once('error', reject)
     });
   }
+});
+
+contract("ViaEURBondIssue", async (accounts) => {
+  it("should send ether to Via-EUR bond contract and issue Via-EUR bonds to sender (issuer)", async () => {
+    //this case is similar to the Via-USD Bond issue above
+    //only difference is that this test requires two calls to the oracle instead of one in the Via-USD case
+  });
+});
+
+contract("BondIssueForCashTokensOfDifferentCurrency", async (accounts) => {
+  it("should send Via-USD cash tokens to Via-EUR bond contract and issue Via-EUR bonds to sender (purchaser)", async () => {
+    //in this test cases, first ether should be sent from account[0] to Via-EUR bond contract to issue Via-EUR bonds to issuer
+    //then, Via-USD cash tokens should be sent from account[1] to the Via-EUR bond contract which will transfer the issued Via-EUR bonds to the sender of the Via-USD cash tokens(purchaser)
+  });
+});
+
+contract("BondIssueForCashTokensOfSameCurrency", async (accounts) => {
+  it("should send Via-EUR cash tokens to Via-EUR bond contract and issue Via-EUR to sender (purchaser)", async () => {
+    //in this test cases, first ether should be sent from account[0] to Via-EUR bond contract to issue Via-EUR bonds to issuer
+    //then, Via-EUR cash tokens should be sent from account[1] to the Via-EUR bond contract which will transfer the issued Via-EUR bonds to the sender of the Via-EUR cash tokens(purchaser)
+  });
+});
+
+contract("BondRedemptionByIssuerByReturningBonds", async (accounts) => {
+  it("should send Via-EUR tokens to Via-EUR contract and get back ether paid in earlier", async () => {
+    //in this test cases, first ether should be sent from account[0] to Via-EUR bond contract to issue Via-EUR bonds to issuer
+    //then, the same Via-EUR bond tokens should be sent from account[0] to the Via-EUR bond contract which will transfer the ether paid in earlier to the sender of Via-EUR bond tokens (issuer)
+  });
+});
+
+contract("BondRedemptionByIssuerByPayingCash", async (accounts) => {
+  it("should send Via-USD cash tokens to Via-USD bond contract and pay out paid in ether and cash tokens by bond purchasers", async () => {
+    //in this test cases, first ether should be sent from account[0] to Via-USD bond contract to issue Via-USD bonds to issuer
+    //then, Via-EUR cash tokens should be sent from account[1] to the Via-USD bond contract to purchase Via-USD bond tokens issued
+    //then, ether should be sent from account[2] to the Via-USD bond contract to purchase Via-USD bond contract to purchase Via-USD bond tokens issued
+    //then, issuer of Via-USD bonds (account[0]) should send Via-USD cash tokens to the Via-USD bond contract which will return ether to account[2] and Via-EUR cash to account[1] paid in earlier
+  });
+});
+
+contract("BondRedemptionByPurchasersWithIssuingCollateral", async (accounts) => {
+  it("should send collateral for issuing bonds to purchasers if bond redemption is not done by issuer", async () => {
+    //in this test cases, first ether should be sent from account[0] to Via-EUR bond contract to issue Via-EUR bonds to issuer
+    //then, account[1] should send Via-USD cash tokens to the Via-EUR bond contract to purchase the issued Via-EUR bonds
+    //then, account[1] should send the Via-EUR bond tokens back to the Via-EUR bond contract which should pay out the ether paid in for issue of the Via-EUR bonds to account[1] (the purchaser)
+  });
 });
