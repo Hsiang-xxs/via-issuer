@@ -124,17 +124,18 @@ contract Cash is ERC20, Initializable, Ownable {
             return false;
     }
 
-    function deductFromBalance(bytes16 tokens, address receiver) public returns (bool){
+    function deductFromBalance(bytes16 tokens, address receiver) public returns (bytes16){
         //cash token issuer should have more tokens than being redeemed
         if(ABDKMathQuad.cmp(tokens, balances[address(this)])==-1 || ABDKMathQuad.cmp(tokens, balances[address(this)])==0){
             balances[address(this)] = ABDKMathQuad.sub(balances[address(this)], tokens);
             balances[receiver] = ABDKMathQuad.add(balances[receiver], tokens);
-            return true;
+            return ABDKMathQuad.fromUInt(0);
         }
         else{
+            bytes16 balance = ABDKMathQuad.sub(tokens, balances[address(this)]);
             balances[receiver] = ABDKMathQuad.add(balances[receiver], balances[address(this)]);
             balances[address(this)] = 0;            
-            return false;
+            return balance;
         }
     }
 
@@ -368,7 +369,7 @@ contract Cash is ERC20, Initializable, Ownable {
             for(uint256 q=0; q<factory.getTokenCount(); q++){
                 address viaAddress = factory.tokens(q);
                 if(factory.getName(viaAddress) == currency && factory.getType(viaAddress) == "ViaCash"){
-                    if(Cash(address(uint160(viaAddress))).deductFromBalance(value, party)){
+                    if(ABDKMathQuad.cmp(Cash(address(uint160(viaAddress))).deductFromBalance(value, party),0)==1){
                         deposits[party][currency] = ABDKMathQuad.sub(deposits[party][currency], value);
                         //adjust total supply
                         totalSupply_ = ABDKMathQuad.sub(totalSupply_, amount);

@@ -324,7 +324,7 @@ contract Bond is ERC20, Initializable, Ownable {
                                 for(uint256 r=0; p<factory.getTokenCount(); r++){
                                     viaAddress = factory.tokens(r);
                                     if(factory.getName(viaAddress) == tokenName && factory.getType(viaAddress) == "ViaCash"){
-                                        if(Cash(address(uint160(viaAddress))).deductFromBalance(redemptionAmount, cp)){
+                                        if(ABDKMathQuad.cmp(Cash(address(uint160(viaAddress))).deductFromBalance(redemptionAmount, cp),0)==1){
                                             ethbalances[address(this)] = ABDKMathQuad.sub(ethbalances[address(this)], redemptionAmount);
                                             //send redeemed ether to payer
                                             address(uint160(payer)).transfer(ABDKMathQuad.toUInt(redemptionAmount));
@@ -335,6 +335,9 @@ contract Bond is ERC20, Initializable, Ownable {
                                             //generate event
                                             emit ViaBondRedeemed(tokenName, ABDKMathQuad.toUInt(redemptionAmount), ABDKMathQuad.toUInt(purchases[cp][bondsIssued[q]].purchasedIssueAmount), subscribedDays);
                                             status = true; 
+                                        }
+                                        else{
+                                            status = false;
                                         }
                                     }
                                 }
@@ -427,7 +430,10 @@ contract Bond is ERC20, Initializable, Ownable {
                         //if there is enough issued bonds, transfer bond from issuer to payer
                         transfer(payer, ABDKMathQuad.toUInt(paidInAmount));            
                         //add purchaser as counter party in issuer's record
-                        issues[issuers[i]][bondsIssued[q]].counterParties[issues[issuers[i]][bondsIssued[q]].counterParties.length] = payer;
+                        if(issues[issuers[i]][bondsIssued[q]].counterParties.length==1)
+                            issues[issuers[i]][bondsIssued[q]].counterParties[0] = payer;
+                        else
+                            issues[issuers[i]][bondsIssued[q]].counterParties[issues[issuers[i]][bondsIssued[q]].counterParties.length] = payer;
                         //reduce issuable value of bond by amount transferred to purchaser
                         issues[issuers[i]][bondsIssued[q]].purchasedIssueAmount = ABDKMathQuad.add(issues[issuers[i]][bondsIssued[q]].purchasedIssueAmount, paidInAmount); 
                         //add bond to purchaser's record
