@@ -1,6 +1,9 @@
 const HDWalletProvider = require("@truffle/hdwallet-provider");
 
-require('dotenv').config()
+require('dotenv').config();
+
+const fs = require('fs');
+const mnemonic = fs.readFileSync(".secret").toString().trim();
 
 module.exports = {
     // See <http://truffleframework.com/docs/advanced/configuration>
@@ -14,7 +17,7 @@ module.exports = {
             gas:6721975,
         },
         ropsten: {
-            provider: () => new HDWalletProvider(process.env.MNENOMIC, "https://ropsten.infura.io/v3/" + process.env.INFURA_API_KEY),
+            provider: () => new HDWalletProvider(mnemonic, "https://ropsten.infura.io/v3/" + process.env.INFURA_API_KEY),
             network_id: 3,
             gas: 6721975,
             gasPrice: 10000000000

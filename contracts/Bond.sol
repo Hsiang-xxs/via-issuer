@@ -303,6 +303,7 @@ contract Bond is ERC20, Initializable, Ownable {
         else{
             address viaAddress;
             bool status = false;
+            bytes16 totalToRedeem;
             //find the bond that was issued by payer (issuer) earlier
             for(uint256 q=0; q<bondsIssued.length; q++){
                 if(ABDKMathQuad.cmp(amount, issues[payer][bondsIssued[q]].purchasedIssueAmount)==1){
@@ -324,12 +325,10 @@ contract Bond is ERC20, Initializable, Ownable {
                                 for(uint256 r=0; p<factory.getTokenCount(); r++){
                                     viaAddress = factory.tokens(r);
                                     if(factory.getName(viaAddress) == tokenName && factory.getType(viaAddress) == "ViaCash"){
-                                        if(ABDKMathQuad.cmp(Cash(address(uint160(viaAddress))).deductFromBalance(redemptionAmount, cp),0)==1){
-                                            ethbalances[address(this)] = ABDKMathQuad.sub(ethbalances[address(this)], redemptionAmount);
-                                            //send redeemed ether to payer
-                                            address(uint160(payer)).transfer(ABDKMathQuad.toUInt(redemptionAmount));
-                                            //adjust total supply of this via bond
-                                            totalSupply_ = ABDKMathQuad.sub(totalSupply_, amount);
+                                        bytes16 balanceToRedeem = Cash(address(uint160(viaAddress))).deductFromBalance(redemptionAmount, cp);
+                                        totalToRedeem = ABDKMathQuad.add(totalToRedeem, balanceToRedeem);
+                                        //if balance left to redeem is 0
+                                        if(balanceToRedeem==0){
                                             //adjust amount available for redemption 
                                             amount = ABDKMathQuad.sub(amount, redemptionAmount);
                                             //generate event
@@ -337,7 +336,10 @@ contract Bond is ERC20, Initializable, Ownable {
                                             status = true; 
                                         }
                                         else{
-                                            status = false;
+                                            //adjust amount available for redemption 
+                                            amount = ABDKMathQuad.sub(amount, ABDKMathQuad.sub(redemptionAmount, balanceToRedeem));
+                                            //generate event
+                                            emit ViaBondRedeemed(tokenName, ABDKMathQuad.toUInt(balanceToRedeem), ABDKMathQuad.toUInt(purchases[cp][bondsIssued[q]].purchasedIssueAmount), subscribedDays);
                                         }
                                     }
                                 }
@@ -350,6 +352,15 @@ contract Bond is ERC20, Initializable, Ownable {
                             //if all bond purchasers are redeemed, then delete the issuer record
                             delete(issues[payer][bondsIssued[q]]);
                     }
+                    //find proportion to redeem
+                    bytes16 proportionToRedeem = ABDKMathQuad.div(totalToRedeem, issues[payer][bondsIssued[q]].purchasedIssueAmount);
+                    //returned redeemed proportion of collateral to payer (issuer)
+                    bytes16 etherToRedeem = ABDKMathQuad.mul(issues[payer][bondsIssued[q]].collateralAmount, ABDKMathQuad.sub(ABDKMathQuad.fromUInt(1), proportionToRedeem));
+                    ethbalances[address(this)] = ABDKMathQuad.sub(ethbalances[address(this)], etherToRedeem);
+                    //send redeemed ether to payer
+                    address(uint160(payer)).transfer(ABDKMathQuad.toUInt(etherToRedeem));
+                    //adjust total supply of this via bond
+                    totalSupply_ = ABDKMathQuad.sub(totalSupply_, etherToRedeem);
                     //if any balance amount remains after redemptions, return the balance to the issuer
                     if(amount>0)
                         address(uint160(payer)).transfer(ABDKMathQuad.toUInt(amount));
