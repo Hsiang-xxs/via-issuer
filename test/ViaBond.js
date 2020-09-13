@@ -6,6 +6,7 @@ const Bond = artifacts.require('Bond');
 const stringutils = artifacts.require('stringutils');
 const ABDKMathQuad = artifacts.require('ABDKMathQuad');
 const ViaOracle = artifacts.require('ViaOracle');
+const Token = artifacts.require('Token');
 
 web3.setProvider("http://127.0.0.1:8545");
 
@@ -23,16 +24,17 @@ contract("BondContractSize", function(accounts) {
     });
   });
 
-  contract("IssuingViaUSDBond", async (accounts) => {
+/*contract("IssuingViaUSDBond", async (accounts) => {
     it("should send ether to Via-USD bond contract and then get some Via-USD bond tokens to sender (issuer)", async () => {
         var abdkMathQuad = await ABDKMathQuad.deployed();
         await Bond.link(abdkMathQuad);
 
         var factory = await Factory.deployed();
         var bond = await Bond.deployed();
-        var oracle = await ViaOracle.deployed();    
+        var oracle = await ViaOracle.deployed();  
+        var token = await Token.deployed();  
         
-        await factory.createToken(bond.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Bond"), oracle.address);
+        await factory.createIssuer(bond.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Bond"), oracle.address, token.address);
         
         var viausdBondAddress = await factory.tokens(0);
         var viausdBondName = await web3.utils.hexToUtf8(await factory.getName(viausdBondAddress));
@@ -71,9 +73,10 @@ contract("TransferViaUSDBond", async (accounts) => {
 
       var factory = await Factory.deployed();
       var bond = await Bond.deployed();
-      var oracle = await ViaOracle.deployed();    
+      var oracle = await ViaOracle.deployed(); 
+      var token = await Token.deployed();   
       
-      await factory.createToken(bond.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Bond"), oracle.address);
+      await factory.createIssuer(bond.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Bond"), oracle.address, token.address);
       
       var viausdBondAddress = await factory.tokens(0);
       var viausdBondName = await web3.utils.hexToUtf8(await factory.getName(viausdBondAddress));
@@ -158,4 +161,4 @@ contract("BondRedemptionByPurchasersWithIssuingCollateral", async (accounts) => 
     //then, account[1] should send Via-USD cash tokens to the Via-EUR bond contract to purchase the issued Via-EUR bonds
     //then, account[1] should send the Via-EUR bond tokens back to the Via-EUR bond contract which should pay out the ether paid in for issue of the Via-EUR bonds to account[1] (the purchaser)
   });
-});
+});*/

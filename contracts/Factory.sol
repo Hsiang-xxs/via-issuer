@@ -24,6 +24,9 @@ contract Factory is ProxyFactory {
 
     address[] public tokens;
 
+    //list of issued token products
+    mapping(bytes => address) products;
+
     event TokenCreated(address indexed _address, bytes32 tokenName, bytes32 tokenType);
 
     function getTokenCount() public view returns(uint tokenCount) {
@@ -38,11 +41,16 @@ contract Factory is ProxyFactory {
         return token[viaAddress].tokenType;
     }
 
-    //token factory 
-    function createToken(address _target, bytes32 tokenName, bytes32 tokenType, address _oracle) external{
+    //retrieve token product address for given identifier (symbol)
+    function getProduct(bytes memory symbol) public returns(address){
+        return products[symbol];
+    }
+
+    //issuer factory 
+    function createIssuer(address _target, bytes32 tokenName, bytes32 tokenType, address _oracle, address _token) external{
         address _owner = msg.sender;
 
-        bytes memory _payload = abi.encodeWithSignature("initialize(bytes32,address,address)", tokenName, _owner, _oracle);
+        bytes memory _payload = abi.encodeWithSignature("initialize(bytes32,bytes32,address,address,address)", tokenName, tokenType, _owner, _oracle, _token);
 
         // Deploy proxy
         address _via = deployMinimal(_target, _payload);
@@ -58,6 +66,18 @@ contract Factory is ProxyFactory {
         }
     }
     
+    //token factory
+    function createToken(address _target, bytes32 tokenName, bytes32 tokenProduct, bytes memory tokenSymbol) public returns(address){
+        address _owner = msg.sender;
+
+        bytes memory _payload = abi.encodeWithSignature("initialize(bytes32,address,bytes32,bytes32)", tokenName, _owner, tokenProduct, tokenSymbol);
+
+        // Deploy proxy
+        address _via = deployMinimal(_target, _payload);
+        products[tokenSymbol] = _via;       
+        emit TokenCreated(_via, tokenName, tokenProduct);
+        return _via;
+    }
 }
 
 

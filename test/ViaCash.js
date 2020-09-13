@@ -6,6 +6,7 @@ const Cash = artifacts.require('Cash');
 const stringutils = artifacts.require('stringutils');
 const ABDKMathQuad = artifacts.require('ABDKMathQuad');
 const ViaOracle = artifacts.require('ViaOracle');
+const Token = artifacts.require('Token');
 
 web3.setProvider("http://127.0.0.1:8545");
 
@@ -30,9 +31,10 @@ contract("IssuingViaUSD", async (accounts) => {
 
         var factory = await Factory.deployed();
         var cash = await Cash.deployed();
-        var oracle = await ViaOracle.deployed();    
+        var oracle = await ViaOracle.deployed(); 
+        var token = await Token.deployed();   
         
-        await factory.createToken(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"), oracle.address);
+        await factory.createIssuer(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"), oracle.address, token.address);
         
         var viausdCashAddress = await factory.tokens(0);
         var viausdCashName = await web3.utils.hexToUtf8(await factory.getName(viausdCashAddress));
@@ -63,7 +65,7 @@ contract("IssuingViaUSD", async (accounts) => {
       });
     }
 });
-
+/*
 contract("IssuingViaEUR", async (accounts) => {
   it("should send ether to Via-EUR cash contract and then get some Via-EUR cash tokens", async () => {
       var abdkMathQuad = await ABDKMathQuad.deployed();
@@ -71,9 +73,10 @@ contract("IssuingViaEUR", async (accounts) => {
 
       var factory = await Factory.deployed();
       var cash = await Cash.deployed();
-      var oracle = await ViaOracle.deployed();    
+      var oracle = await ViaOracle.deployed();  
+      var token = await Token.deployed();  
       
-      await factory.createToken(cash.address, web3.utils.utf8ToHex("Via-EUR"), web3.utils.utf8ToHex("Cash"), oracle.address);
+      await factory.createIssuer(cash.address, web3.utils.utf8ToHex("Via-EUR"), web3.utils.utf8ToHex("Cash"), oracle.address, token.address);
       
       var viaeurCashAddress = await factory.tokens(0);
       var viaeurCashName = await web3.utils.hexToUtf8(await factory.getName(viaeurCashAddress));
@@ -112,9 +115,10 @@ contract("ViaUSDExchange", async (accounts) => {
 
     var factory = await Factory.deployed();
     var cash = await Cash.deployed();
-    var oracle = await ViaOracle.deployed();   
+    var oracle = await ViaOracle.deployed(); 
+    var token = await Token.deployed();  
     
-    await factory.createToken(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"), oracle.address);
+    await factory.createIssuer(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"), oracle.address, token.address);
     
     var viausdCashAddress = await factory.tokens(0);
     var viausdCashName = await web3.utils.hexToUtf8(await factory.getName(viausdCashAddress));
@@ -175,9 +179,10 @@ contract("ViaUSDRedemption", async (accounts) => {
 
     var factory = await Factory.deployed();
     var cash = await Cash.deployed();
-    var oracle = await ViaOracle.deployed();   
+    var oracle = await ViaOracle.deployed();  
+    var token = await Token.deployed(); 
     
-    await factory.createToken(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"), oracle.address);
+    await factory.createIssuer(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"), oracle.address, token.address);
     
     var viausdCashAddress = await factory.tokens(0);
     var viausdCashName = await web3.utils.hexToUtf8(await factory.getName(viausdCashAddress));
@@ -226,9 +231,10 @@ contract("TransferViaUSD", async (accounts) => {
 
     var factory = await Factory.deployed();
     var cash = await Cash.deployed();
-    var oracle = await ViaOracle.deployed();   
+    var oracle = await ViaOracle.deployed(); 
+    var token = await Token.deployed();  
     
-    await factory.createToken(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"), oracle.address);
+    await factory.createIssuer(cash.address, web3.utils.utf8ToHex("Via-USD"), web3.utils.utf8ToHex("Cash"), oracle.address, token.address);
     
     var viausdCashAddress = await factory.tokens(0);
     var viausdCashName = await web3.utils.hexToUtf8(await factory.getName(viausdCashAddress));
@@ -269,4 +275,4 @@ contract("TransferViaUSD", async (accounts) => {
     });
   }
 
-});
+});*/

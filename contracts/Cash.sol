@@ -65,12 +65,12 @@ contract Cash is ERC20, Initializable, Ownable {
     event ViaCashRedeemed(bytes32 currency, bytes16 value);
 
     //initiliaze proxies
-    function initialize(bytes32 _name, address _owner, address _oracle) public {
+    function initialize(bytes32 _name, bytes32 _type, address _owner, address _oracle, address _token) public {
         Ownable.initialize(_owner);
         factory = Factory(_owner);
         oracle = ViaOracle(_oracle);
         name = _name;
-        symbol = _name;
+        symbol = _type;
     }
 
     //handling pay in of ether for issue of via cash tokens
@@ -122,19 +122,28 @@ contract Cash is ERC20, Initializable, Ownable {
                 address viaAddress = factory.tokens(q);
                 if(factory.getType(viaAddress) == "ViaCash"){
                     for(uint256 p=0; p<deposits[sender][factory.getName(viaAddress)].issuedVia.length; p++){
-                        if(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),deposits[sender][factory.getName(viaAddress)].issuedVia[p])==0){
+                        if(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),deposits[sender][factory.getName(viaAddress)].issuedVia[p])==0 ||
+                            ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),deposits[sender][factory.getName(viaAddress)].issuedVia[p])==1){
                             deposits[receiver][factory.getName(viaAddress)].totalAmount = ABDKMathQuad.add(
                                 deposits[receiver][factory.getName(viaAddress)].totalAmount, deposits[sender][factory.getName(viaAddress)].issuedVia[p]);
                             deposits[receiver][factory.getName(viaAddress)].paidIn[deposits[receiver][factory.getName(viaAddress)].paidIn.length] 
                                 = deposits[sender][factory.getName(viaAddress)].paidIn[p];
                             deposits[receiver][factory.getName(viaAddress)].issuedVia[deposits[receiver][factory.getName(viaAddress)].issuedVia.length] 
                                 = deposits[sender][factory.getName(viaAddress)].issuedVia[p];
-                        }
-                        else if(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),deposits[sender][factory.getName(viaAddress)].issuedVia[p])==1){
-
+                            deposits[sender][factory.getName(viaAddress)].paidIn[p] = 0;
+                            deposits[sender][factory.getName(viaAddress)].issuedVia[p] = 0;
                         }
                         else if(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens),deposits[sender][factory.getName(viaAddress)].issuedVia[p])==-1){
-
+                            deposits[receiver][factory.getName(viaAddress)].totalAmount = ABDKMathQuad.add(
+                                deposits[receiver][factory.getName(viaAddress)].totalAmount, ABDKMathQuad.fromUInt(tokens));
+                            bytes16 proportionToDeduct = ABDKMathQuad.mul(ABDKMathQuad.div(ABDKMathQuad.fromUInt(tokens), deposits[sender][factory.getName(viaAddress)].paidIn[p]),
+                                                        ABDKMathQuad.mul(deposits[sender][factory.getName(viaAddress)].paidIn[p], ABDKMathQuad.fromUInt(100)));
+                            deposits[receiver][factory.getName(viaAddress)].paidIn[deposits[receiver][factory.getName(viaAddress)].paidIn.length] 
+                                = ABDKMathQuad.sub(deposits[receiver][factory.getName(viaAddress)].paidIn[deposits[receiver][factory.getName(viaAddress)].paidIn.length], proportionToDeduct);
+                            deposits[receiver][factory.getName(viaAddress)].issuedVia[deposits[receiver][factory.getName(viaAddress)].issuedVia.length] 
+                                = ABDKMathQuad.fromUInt(tokens);
+                            deposits[sender][factory.getName(viaAddress)].paidIn[p] = ABDKMathQuad.sub(deposits[sender][factory.getName(viaAddress)].paidIn[p], proportionToDeduct);
+                            deposits[sender][factory.getName(viaAddress)].issuedVia[p] = ABDKMathQuad.sub(deposits[sender][factory.getName(viaAddress)].issuedVia[p], ABDKMathQuad.fromUInt(tokens));
                         }
                     }
                 }
@@ -347,7 +356,7 @@ contract Cash is ERC20, Initializable, Ownable {
     //via is the number of this via cash token that is being issued, party is the user account address to which issued tokens are credited
     function finallyIssue(bytes16 via, address party, bytes32 currency, bytes16 amount) private {
         //add paid in currency to depositor
-        if(deposits[party][currency].totalAmount==0){
+        /*if(deposits[party][currency].totalAmount==0){
             deposits[party][currency].totalAmount = amount;
             deposits[party][currency].issuedVia[0] = via;
             deposits[party][currency].paidIn[0] = amount;
@@ -356,7 +365,7 @@ contract Cash is ERC20, Initializable, Ownable {
             deposits[party][currency].totalAmount = ABDKMathQuad.add(deposits[party][currency].totalAmount, amount);
             deposits[party][currency].issuedVia[deposits[party][currency].issuedVia.length] = via;
             deposits[party][currency].paidIn[deposits[party][currency].paidIn.length] = amount;
-        }
+        }*/
         //add via to this contract's balance first (ie issue them first)
         balances[address(this)] = ABDKMathQuad.add(balances[address(this)], via);
         //transfer amount to buyer 

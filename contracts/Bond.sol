@@ -10,6 +10,7 @@ import "@openzeppelin/upgrades/contracts/Initializable.sol";
 import "@openzeppelin/contracts-ethereum-package/contracts/ownership/Ownable.sol";
 import "./Factory.sol";
 import "./Cash.sol";
+import "./Token.sol";
 
 contract Bond is ERC20, Initializable, Ownable {
 
@@ -23,9 +24,17 @@ contract Bond is ERC20, Initializable, Ownable {
     //via oracle
     ViaOracle private oracle;
 
-    //name of Via token (eg, Via-USD%)
+    //name of Via token (eg, Via-USD)
     bytes32 public name;
     bytes32 public symbol;
+
+    //token address
+    address private token;
+
+    //requestor (msg sender address)
+    address payable requestor;
+    //forwarding token address
+    address private forwarder;
 
     //ether balances held by this issuer against which via bond tokens are issued
     mapping(address => bytes16) private ethbalances;
@@ -43,14 +52,14 @@ contract Bond is ERC20, Initializable, Ownable {
         uint256 timeSubscribed;
     }
 
-    //mapping issuer (address) to time of issue (uint256) which acts as identifier for bonds on offer
-    mapping(address => mapping (uint256 => bond)) public issues;
+    //mapping issuer (address) to address of bond token (address) which acts as identifier for bonds on offer
+    mapping(address => mapping (address => bond)) public issues;
 
-    //mapping purchaser (address) to time of issue (uint256) which acts as identifier for bonds subscribed
-    mapping(address => mapping (uint256 => bond)) public purchases;
+    //mapping purchaser (address) to address of bond token (address) which acts as identifier for bonds subscribed
+    mapping(address => mapping (address => bond)) public purchases;
 
-    //array of issues of this via bond, where bond IDs are their times of issue
-    uint256[] private bondsIssued;
+    //array of issues of this via bond, where bond IDs are their addresses of their token issues
+    address[] private bondsIssued;
 
     //array of issuers
     address[] private issuers;
@@ -82,12 +91,13 @@ contract Bond is ERC20, Initializable, Ownable {
     event ViaBondRedeemed(bytes32 currency, uint value, uint price, uint tenure);
 
     //initiliaze proxies
-    function initialize(bytes32 _name, address _owner, address _oracle) public {
+    function initialize(bytes32 _name, bytes32 _type, address _owner, address _oracle, address _token) public {
         Ownable.initialize(_owner);
         factory = Factory(_owner);
         oracle = ViaOracle(_oracle);
         name = _name;
-        symbol = _name;
+        symbol = _type;
+        token = _token;
     }
 
     //handling pay in of ether for issue of via bond tokens
@@ -98,12 +108,22 @@ contract Bond is ERC20, Initializable, Ownable {
         issue(ABDKMathQuad.fromUInt(msg.value), msg.sender, "ether", address(this));
     }
 
+    //forwarding call from issued bond token if at all such a call arrives
+    function transferFoward(address payable _requestor, address _forwarder, address _sender, address _receiver, uint256 _tokens) public returns (bool){
+        requestor = _requestor;
+        forwarder = _forwarder;
+        if(transferFrom(_sender, _receiver, _tokens))
+            return true;
+        else
+            return false;
+    }
+
     //overriding this function of ERC20 standard
     function transferFrom(address sender, address receiver, uint256 tokens) public returns (bool){
         //check if tokens are being transferred to this bond contract
-        if(receiver == address(this)){
+        if(receiver == address(this) || receiver == forwarder){
             //if token name is the same, this transfer has to be redeemed
-            if(Bond(address(msg.sender)).name()==name){
+            if(Token(address(msg.sender)).name()==name || Token(requestor).name()==name){
                 if(redeem(ABDKMathQuad.fromUInt(tokens), sender, name, "ViaBond"))
                     return true;
                 else
@@ -114,9 +134,14 @@ contract Bond is ERC20, Initializable, Ownable {
                 //issue only if paid in tokens are cash tokens, since bond tokens can't be paid to issue bond token
                 for(uint256 p=0; p<factory.getTokenCount(); p++){
                     address viaAddress = factory.tokens(p);
-                    if(factory.getName(viaAddress) == Cash(address(msg.sender)).name() &&
-                            factory.getType(viaAddress) != "ViaBond"){
+                    if(factory.getName(viaAddress) == Cash(address(msg.sender)).name() && factory.getType(viaAddress) != "ViaBond"){
                         if(issue(ABDKMathQuad.fromUInt(tokens), sender, Cash(address(msg.sender)).name(), viaAddress))
+                            return true;
+                        else
+                            return false;
+                    }
+                    else if(factory.getName(viaAddress) == Cash(requestor).name() && factory.getType(viaAddress) != "ViaBond"){
+                        if(issue(ABDKMathQuad.fromUInt(tokens), sender, Cash(requestor).name(), viaAddress))
                             return true;
                         else
                             return false;
@@ -127,15 +152,72 @@ contract Bond is ERC20, Initializable, Ownable {
         }
         else {
             //bond tokens are being sent to a user account
-            //owner should have more tokens than being transferred
-            require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), balances[sender])==-1 || ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), balances[sender])==0);
-            //sending contract should be allowed by token owner to make this transfer
-            //require(ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), allowed[sender][msg.sender])==-1 || ABDKMathQuad.cmp(ABDKMathQuad.fromUInt(tokens), allowed[sender][msg.sender])==0);
-            balances[sender] = ABDKMathQuad.sub(balances[sender], ABDKMathQuad.fromUInt(tokens));
-            //allowed[sender][msg.sender] = ABDKMathQuad.sub(allowed[sender][msg.sender], ABDKMathQuad.fromUInt(tokens));
-            balances[receiver] = ABDKMathQuad.add(balances[receiver], ABDKMathQuad.fromUInt(tokens));
-            emit Transfer(sender, receiver, tokens);
-            return true;
+            //confirm if this is the bond issuer
+            address issuedBond=address(0x0);
+            if(Token(address(msg.sender)).name()==name){
+                issuedBond = factory.getProduct(Token(address(msg.sender)).symbol());
+            }
+            else if(Token(requestor).name()==name){
+                issuedBond = factory.getProduct(Token(requestor).symbol());
+            }
+            if(issuedBond!=address(0x0)){
+                for(uint256 q=0; q<factory.getTokenCount(); q++){
+                    address viaAddress = factory.tokens(q);
+                    if(factory.getType(viaAddress) == "ViaBond"){
+                        for(uint256 p=0; p<bondsIssued.length; p++){
+                            //sender is transferring its full purchase amount of bonds
+                            if(ABDKMathQuad.cmp(purchases[sender][issuedBond].purchasedIssueAmount, ABDKMathQuad.fromUInt(tokens))==0){
+                                for (uint i=0; i < purchases[sender][issuedBond].counterParties.length; i++) {
+                                    purchases[receiver][issuedBond].counterParties.push(purchases[sender][issuedBond].counterParties[i]);
+                                }
+                                purchases[receiver][issuedBond].parValue = purchases[sender][issuedBond].parValue;
+                                purchases[receiver][issuedBond].price = purchases[sender][issuedBond].price;
+                                purchases[receiver][issuedBond].purchasedIssueAmount = ABDKMathQuad.add(
+                                    purchases[sender][issuedBond].purchasedIssueAmount,purchases[receiver][issuedBond].purchasedIssueAmount);
+                                purchases[receiver][issuedBond].collateralAmount = ABDKMathQuad.add(
+                                    purchases[sender][issuedBond].collateralAmount, purchases[receiver][issuedBond].collateralAmount);
+                                purchases[receiver][issuedBond].collateralCurrency = purchases[sender][issuedBond].collateralCurrency;
+                                purchases[receiver][issuedBond].timeSubscribed = purchases[sender][issuedBond].timeSubscribed;
+                                delete purchases[sender][issuedBond];
+                                if(Token(issuedBond).transferToken(sender, receiver, tokens)){
+                                    emit Transfer(sender, receiver, tokens);
+                                    return true;
+                                }
+                            }
+                            //sender is transferring only a partial purchased amount of bonds
+                            else if(ABDKMathQuad.cmp(purchases[sender][issuedBond].purchasedIssueAmount, ABDKMathQuad.fromUInt(tokens))==1){
+                                for (uint i=0; i < purchases[sender][issuedBond].counterParties.length; i++) {
+                                    purchases[receiver][issuedBond].counterParties.push(purchases[sender][issuedBond].counterParties[i]);
+                                }
+                                purchases[receiver][issuedBond].parValue = purchases[sender][issuedBond].parValue;
+                                purchases[receiver][issuedBond].price = purchases[sender][issuedBond].price;
+                                bytes16 proportionToTransfer = ABDKMathQuad.mul(ABDKMathQuad.div(
+                                    ABDKMathQuad.fromUInt(tokens), purchases[sender][issuedBond].purchasedIssueAmount),
+                                    ABDKMathQuad.mul(ABDKMathQuad.fromUInt(100), purchases[sender][issuedBond].purchasedIssueAmount));
+                                purchases[receiver][issuedBond].purchasedIssueAmount = ABDKMathQuad.add(
+                                    purchases[receiver][issuedBond].purchasedIssueAmount,proportionToTransfer);
+                                purchases[sender][issuedBond].purchasedIssueAmount = ABDKMathQuad.sub(
+                                    purchases[sender][issuedBond].purchasedIssueAmount,proportionToTransfer);
+                                proportionToTransfer = ABDKMathQuad.mul(ABDKMathQuad.div(
+                                    ABDKMathQuad.fromUInt(tokens), purchases[sender][issuedBond].purchasedIssueAmount),
+                                    ABDKMathQuad.mul(ABDKMathQuad.fromUInt(100), purchases[sender][issuedBond].collateralAmount));
+                                purchases[receiver][issuedBond].collateralAmount = ABDKMathQuad.add(
+                                    purchases[receiver][issuedBond].collateralAmount, proportionToTransfer);
+                                purchases[sender][issuedBond].collateralAmount = ABDKMathQuad.sub(
+                                    purchases[sender][issuedBond].collateralAmount, proportionToTransfer);
+                                purchases[receiver][issuedBond].collateralCurrency = purchases[sender][issuedBond].collateralCurrency;
+                                purchases[receiver][issuedBond].timeSubscribed = purchases[sender][issuedBond].timeSubscribed;
+                                if(Token(issuedBond).transferToken(sender, receiver, tokens)){
+                                    emit Transfer(sender, receiver, tokens);
+                                    return true;
+                                }
+                            }
+                        }    
+                    }
+                }
+                
+            }
+            return false;
         }
     }
 
@@ -256,7 +338,9 @@ contract Bond is ERC20, Initializable, Ownable {
                                 //send redeemed ether to payer
                                 address(uint160(payer)).transfer(ABDKMathQuad.toUInt(redemptionAmount));
                                 //adjust total supply of this via bond
-                                totalSupply_ = ABDKMathQuad.sub(totalSupply_, amount);
+                                Token(bondsIssued[q]).reduceSupply(amount);
+                                //reduce payer's balance of bond held
+                                Token(bondsIssued[q]).reduceBalance(payer, amount);
                                 //generate event
                                 emit ViaBondRedeemed(tokenName, ABDKMathQuad.toUInt(redemptionAmount), ABDKMathQuad.toUInt(purchases[payer][bondsIssued[q]].purchasedIssueAmount), subscribedDays);
                                 status = true;
@@ -271,7 +355,7 @@ contract Bond is ERC20, Initializable, Ownable {
             for(uint256 q=0; q<bondsIssued.length; q++){
                 if(ABDKMathQuad.cmp(ABDKMathQuad.sub(issues[payer][bondsIssued[q]].parValue, issues[payer][bondsIssued[q]].purchasedIssueAmount), amount)==0){
                     //calculate redemption amount based on how much collateral is not encumbered
-                    uint256 issuedDays = (bondsIssued[q] - now)/ 60 / 60 / 24;
+                    uint256 issuedDays = (issues[payer][bondsIssued[q]].timeSubscribed - now)/ 60 / 60 / 24;
                     bytes16 uncumberedAmount = ABDKMathQuad.sub(issues[payer][bondsIssued[q]].parValue, issues[payer][bondsIssued[q]].purchasedIssueAmount);
                     //if collateral is ether, transfer ether from issuer to issuer (redeemer) of bond
                     if(issues[payer][bondsIssued[q]].collateralCurrency=="ether"){
@@ -279,7 +363,9 @@ contract Bond is ERC20, Initializable, Ownable {
                         //send redeemed ether to payer
                         address(uint160(payer)).transfer(ABDKMathQuad.toUInt(uncumberedAmount));
                         //adjust total supply of this via bond
-                        totalSupply_ = ABDKMathQuad.sub(totalSupply_, amount);
+                        Token(bondsIssued[q]).reduceSupply(amount);
+                        //reduce payer's balance of bond held
+                        Token(bondsIssued[q]).reduceBalance(payer, amount);
                         //generate event
                         emit ViaBondRedeemed(tokenName, ABDKMathQuad.toUInt(uncumberedAmount), ABDKMathQuad.toUInt(amount), issuedDays);
                         status = true;
@@ -326,6 +412,10 @@ contract Bond is ERC20, Initializable, Ownable {
                                     viaAddress = factory.tokens(r);
                                     if(factory.getName(viaAddress) == tokenName && factory.getType(viaAddress) == "ViaCash"){
                                         bytes16 balanceToRedeem = Cash(address(uint160(viaAddress))).deductFromBalance(redemptionAmount, cp);
+                                        //adjust total supply of this via bond
+                                        Token(bondsIssued[q]).reduceSupply(redemptionAmount);     
+                                        //reduce counter party's balance of bond held
+                                        Token(bondsIssued[q]).reduceBalance(cp, redemptionAmount);
                                         totalToRedeem = ABDKMathQuad.add(totalToRedeem, balanceToRedeem);
                                         //if balance left to redeem is 0
                                         if(balanceToRedeem==0){
@@ -358,9 +448,7 @@ contract Bond is ERC20, Initializable, Ownable {
                     bytes16 etherToRedeem = ABDKMathQuad.mul(issues[payer][bondsIssued[q]].collateralAmount, ABDKMathQuad.sub(ABDKMathQuad.fromUInt(1), proportionToRedeem));
                     ethbalances[address(this)] = ABDKMathQuad.sub(ethbalances[address(this)], etherToRedeem);
                     //send redeemed ether to payer
-                    address(uint160(payer)).transfer(ABDKMathQuad.toUInt(etherToRedeem));
-                    //adjust total supply of this via bond
-                    totalSupply_ = ABDKMathQuad.sub(totalSupply_, etherToRedeem);
+                    address(uint160(payer)).transfer(ABDKMathQuad.toUInt(etherToRedeem));                                   
                     //if any balance amount remains after redemptions, return the balance to the issuer
                     if(amount>0)
                         address(uint160(payer)).transfer(ABDKMathQuad.toUInt(amount));
@@ -416,13 +504,16 @@ contract Bond is ERC20, Initializable, Ownable {
     function finallyIssue(address payer, bytes16 parValue, bytes16 bondPrice, bytes16 paidInAmount, bytes32 paidInCashToken) private {
         bool found = false;
         if(paidInCashToken=="ether"){
+            uint256 issueTime = now;
+            //issue bond which initializes a token with the attributes of the bond
+            address issuedBond = factory.createToken(token, name, symbol, abi.encodePacked(address(this),issueTime));
             //adjust issued bonds to total supply first
-            totalSupply_ = ABDKMathQuad.add(totalSupply_, parValue);
+            Token(issuedBond).addTotalSupply(parValue);
             //issue bond to payer if ether is paid in as collateral
-            transfer(payer, ABDKMathQuad.toUInt(parValue));            
+            Token(issuedBond).transfer(payer, ABDKMathQuad.toUInt(parValue));    
             //keep track of issues
-            storeBond("issue", payer, payer, parValue, bondPrice, ABDKMathQuad.fromUInt(0), paidInAmount, paidInCashToken, now);
-            bondsIssued.push(now);
+            storeBond("issue", payer, payer, parValue, bondPrice, ABDKMathQuad.fromUInt(0), paidInAmount, paidInCashToken, issueTime, issuedBond);
+            bondsIssued.push(issuedBond);
             //keep track of issuers
             for(uint256 i=0; i<issuers.length; i++){
                 if(issuers[i]==payer)
@@ -439,7 +530,7 @@ contract Bond is ERC20, Initializable, Ownable {
                     if(ABDKMathQuad.cmp(ABDKMathQuad.sub(issues[issuers[i]][bondsIssued[q]].parValue, issues[issuers[i]][bondsIssued[q]].purchasedIssueAmount), paidInAmount)==0 ||
                         ABDKMathQuad.cmp(ABDKMathQuad.sub(issues[issuers[i]][bondsIssued[q]].parValue, issues[issuers[i]][bondsIssued[q]].purchasedIssueAmount), paidInAmount)==1){
                         //if there is enough issued bonds, transfer bond from issuer to payer
-                        transfer(payer, ABDKMathQuad.toUInt(paidInAmount));            
+                        Token(bondsIssued[q]).transfer(payer, ABDKMathQuad.toUInt(paidInAmount));            
                         //add purchaser as counter party in issuer's record
                         if(issues[issuers[i]][bondsIssued[q]].counterParties.length==1)
                             issues[issuers[i]][bondsIssued[q]].counterParties[0] = payer;
@@ -448,7 +539,7 @@ contract Bond is ERC20, Initializable, Ownable {
                         //reduce issuable value of bond by amount transferred to purchaser
                         issues[issuers[i]][bondsIssued[q]].purchasedIssueAmount = ABDKMathQuad.add(issues[issuers[i]][bondsIssued[q]].purchasedIssueAmount, paidInAmount); 
                         //add bond to purchaser's record
-                        storeBond("purchase", payer, issuers[i], parValue, bondPrice, issues[issuers[i]][bondsIssued[q]].purchasedIssueAmount, paidInAmount, paidInCashToken, bondsIssued[q]);
+                        storeBond("purchase", payer, issuers[i], parValue, bondPrice, issues[issuers[i]][bondsIssued[q]].purchasedIssueAmount, paidInAmount, paidInCashToken, now, bondsIssued[q]);
                         //transfer cash paid in by purchaser to issuer from whom bond is transferred to purchaser
                         for(uint256 p=0; p<factory.getTokenCount(); p++){
                             address viaAddress = factory.tokens(q);
@@ -495,24 +586,25 @@ contract Bond is ERC20, Initializable, Ownable {
                         bytes16 _purchasedIssueAmount,
                         bytes16 _paidInAmount,
                         bytes32 _paidInCashToken,
-                        uint256 _timeIssued) private {
+                        uint256 _timeIssued,
+                        address _issuedBond) private {
         if(_operation=="issue"){
-            issues[_payer][now].counterParties[0] = _party;
-            issues[_payer][now].parValue = _parValue;
-            issues[_payer][now].price = _bondPrice;
-            issues[_payer][now].purchasedIssueAmount = _purchasedIssueAmount;
-            issues[_payer][now].collateralAmount = _paidInAmount;
-            issues[_payer][now].collateralCurrency = _paidInCashToken;
-            issues[_payer][now].timeSubscribed = _timeIssued;
+            issues[_payer][_issuedBond].counterParties[0] = _party;
+            issues[_payer][_issuedBond].parValue = _parValue;
+            issues[_payer][_issuedBond].price = _bondPrice;
+            issues[_payer][_issuedBond].purchasedIssueAmount = _purchasedIssueAmount;
+            issues[_payer][_issuedBond].collateralAmount = _paidInAmount;
+            issues[_payer][_issuedBond].collateralCurrency = _paidInCashToken;
+            issues[_payer][_issuedBond].timeSubscribed = _timeIssued;
         }
         else if(_operation=="purchase"){
-            purchases[_payer][_timeIssued].counterParties[0] = _party;
-            purchases[_payer][_timeIssued].parValue = _parValue;
-            purchases[_payer][_timeIssued].price = _bondPrice;
-            purchases[_payer][_timeIssued].purchasedIssueAmount = _purchasedIssueAmount;
-            purchases[_payer][_timeIssued].collateralAmount = _paidInAmount;
-            purchases[_payer][_timeIssued].collateralCurrency = _paidInCashToken;
-            purchases[_payer][_timeIssued].timeSubscribed = now;
+            purchases[_payer][_issuedBond].counterParties[0] = _party;
+            purchases[_payer][_issuedBond].parValue = _parValue;
+            purchases[_payer][_issuedBond].price = _bondPrice;
+            purchases[_payer][_issuedBond].purchasedIssueAmount = _purchasedIssueAmount;
+            purchases[_payer][_issuedBond].collateralAmount = _paidInAmount;
+            purchases[_payer][_issuedBond].collateralCurrency = _paidInCashToken;
+            purchases[_payer][_issuedBond].timeSubscribed = _timeIssued;
         }
     }
 
