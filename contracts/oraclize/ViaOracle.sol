@@ -81,7 +81,7 @@ contract ViaOracle is usingProvable {
             emit LogNewProvableQuery("Provable query was NOT sent, please add some ETH to cover for the query fee!");
         } else {
             if(_ratetype == "er" || _ratetype == "ver"){
-                bytes32 queryId = provable_query("URL", string(abi.encodePacked("json(https://via-oracle.azurewebsites.net/rates/er/",_currency,").rate")),500000);  
+                bytes32 queryId = provable_query("URL", string(abi.encodePacked("json(https://url/rates/er/",_currency,").rate")),500000);  
                 pendingQueries[queryId] = params(_tokenContract, _tokenType, _ratetype);
                 emit LogNewProvableQuery(string(abi.encodePacked("Provable query was sent for Via exchange rates, with query id= ",queryId,
                                         " token type= ",_tokenType," rate type= ",_ratetype," currency= ", 
@@ -89,7 +89,7 @@ contract ViaOracle is usingProvable {
                 return queryId;
             }
             else if(_ratetype == "ir"){
-                bytes32 queryId = provable_query("URL", string(abi.encodePacked("json(https://via-oracle.azurewebsites.net/rates/ir/",_currency,").rate")),500000);
+                bytes32 queryId = provable_query("URL", string(abi.encodePacked("json(https://url/rates/ir/",_currency,").rate")),500000);
                 pendingQueries[queryId] = params(_tokenContract, _tokenType, _ratetype);
                 emit LogNewProvableQuery(string(abi.encodePacked("Provable query was sent for Via interest rates, with query id= ",queryId,
                                         " token type= ",_tokenType," rate type= ",_ratetype," currency= ", 

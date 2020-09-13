@@ -24,7 +24,7 @@ contract("BondContractSize", function(accounts) {
     });
   });
 
-/*contract("IssuingViaUSDBond", async (accounts) => {
+contract("IssuingViaUSDBond", async (accounts) => {
     it("should send ether to Via-USD bond contract and then get some Via-USD bond tokens to sender (issuer)", async () => {
         var abdkMathQuad = await ABDKMathQuad.deployed();
         await Bond.link(abdkMathQuad);
@@ -161,4 +161,4 @@ contract("BondRedemptionByPurchasersWithIssuingCollateral", async (accounts) => 
     //then, account[1] should send Via-USD cash tokens to the Via-EUR bond contract to purchase the issued Via-EUR bonds
     //then, account[1] should send the Via-EUR bond tokens back to the Via-EUR bond contract which should pay out the ether paid in for issue of the Via-EUR bonds to account[1] (the purchaser)
   });
-});*/
+});
