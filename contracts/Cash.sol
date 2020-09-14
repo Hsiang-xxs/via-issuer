@@ -356,16 +356,14 @@ contract Cash is ERC20, Initializable, Ownable {
     //via is the number of this via cash token that is being issued, party is the user account address to which issued tokens are credited
     function finallyIssue(bytes16 via, address party, bytes32 currency, bytes16 amount) private {
         //add paid in currency to depositor
-        /*if(deposits[party][currency].totalAmount==0){
+        if(deposits[party][currency].totalAmount==0){
             deposits[party][currency].totalAmount = amount;
-            deposits[party][currency].issuedVia[0] = via;
-            deposits[party][currency].paidIn[0] = amount;
         }
         else{
             deposits[party][currency].totalAmount = ABDKMathQuad.add(deposits[party][currency].totalAmount, amount);
-            deposits[party][currency].issuedVia[deposits[party][currency].issuedVia.length] = via;
-            deposits[party][currency].paidIn[deposits[party][currency].paidIn.length] = amount;
-        }*/
+        }
+        deposits[party][currency].issuedVia.push(via);
+        deposits[party][currency].paidIn.push(amount);
         //add via to this contract's balance first (ie issue them first)
         balances[address(this)] = ABDKMathQuad.add(balances[address(this)], via);
         //transfer amount to buyer 
