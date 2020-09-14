@@ -27,6 +27,10 @@ contract Factory is ProxyFactory {
     //list of issued token products
     mapping(bytes => address) products;
 
+    //list of token product issuers
+    mapping(bytes32 => mapping(bytes32 => address)) issuers;
+
+    event IssuerCreated(address indexed _address, bytes32 tokenName, bytes32 tokenType);
     event TokenCreated(address indexed _address, bytes32 tokenName, bytes32 tokenType);
 
     function getTokenCount() public view returns(uint tokenCount) {
@@ -46,23 +50,30 @@ contract Factory is ProxyFactory {
         return products[symbol];
     }
 
-    //issuer factory 
+    //retrieve token product issuer address for given token name and type
+    function getIssuer(bytes32 tokenType, bytes32 tokenName) public returns(address){
+        return issuers[tokenType][tokenName];
+    }
+
+    //token issuer factory 
     function createIssuer(address _target, bytes32 tokenName, bytes32 tokenType, address _oracle, address _token) external{
         address _owner = msg.sender;
 
         bytes memory _payload = abi.encodeWithSignature("initialize(bytes32,bytes32,address,address,address)", tokenName, tokenType, _owner, _oracle, _token);
 
         // Deploy proxy
-        address _via = deployMinimal(_target, _payload);
-        emit TokenCreated(_via, tokenName, tokenType);
+        address _issuer = deployMinimal(_target, _payload);
+        emit IssuerCreated(_issuer, tokenName, tokenType);
 
         if(tokenType == "Cash"){
-                token[_via] = via("ViaCash", tokenName);
-                tokens.push(_via);
+                token[_issuer] = via("ViaCash", tokenName);
+                tokens.push(_issuer);
+                issuers["ViaCash"][tokenName] = _issuer;
         }
         else if(tokenType == "Bond"){
-                token[_via] = via("ViaBond", tokenName);
-                tokens.push(_via);
+                token[_issuer] = via("ViaBond", tokenName);
+                tokens.push(_issuer);
+                issuers["ViaBond"][tokenName] = _issuer;
         }
     }
     
@@ -73,10 +84,10 @@ contract Factory is ProxyFactory {
         bytes memory _payload = abi.encodeWithSignature("initialize(bytes32,address,bytes32,bytes32)", tokenName, _owner, tokenProduct, tokenSymbol);
 
         // Deploy proxy
-        address _via = deployMinimal(_target, _payload);
-        products[tokenSymbol] = _via;       
-        emit TokenCreated(_via, tokenName, tokenProduct);
-        return _via;
+        address _token = deployMinimal(_target, _payload);
+        products[tokenSymbol] = _token;       
+        emit TokenCreated(_token, tokenName, tokenProduct);
+        return _token;
     }
 }
 
