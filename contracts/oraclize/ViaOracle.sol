@@ -33,7 +33,7 @@ contract ViaOracle is usingProvable {
         payable
     {
         // note : replace OAR if you are testing Oracle with ethereum-bridge (https://github.com/provable-things/ethereum-bridge)
-        //OAR = OracleAddrResolverI(0x5af5600bD912FB07a5590A57D4CBabD7C40E9879); 
+        OAR = OracleAddrResolverI(0x6f485C8BF6fc43eA212E93BBF8ce046C7f1cb475); 
         provable_setProof(proofType_TLSNotary | proofStorage_IPFS);
         provable_setCustomGasPrice(1000000000 wei); // i.e. 1 GWei
     }                              
